@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "macros.html" import RunwayBar, Pill, Button %}
+
+{% block title %}Home — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <div class="meta-line">
+        <span>November 2026</span>
+        <span aria-hidden="true">·</span>
+        <span>Sample data · Riya Sharma</span>
+      </div>
+      <h1 class="page-title">Good morning, {{ user.display_name.split(' ')[0] }}</h1>
+    </div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      {{ Button("Check a purchase", variant="primary", href="/before-you-spend", icon="scale") }}
+      {{ Button("Ask Money Buddy", variant="secondary", href="/money-buddy", icon="book-open") }}
+    </div>
+  </div>
+
+  <!-- 1. Hero visual: Money Runway card FIRST -->
+  {{ RunwayBar(runway) }}
+
+  <!-- 2. Core KPIs (asymmetric lead card + 3 companion stats) -->
+  <section class="home-kpis" aria-label="Monthly overview">
+    <article class="kpi-card kpi-card-featured">
+      <div class="kpi-label">Current balance</div>
+      <div class="kpi-value money" data-countup="{{ user.current_balance_minor }}">{{ kpis.balance }}</div>
+      <div class="kpi-note">Includes {{ user.upcoming_essentials_formatted }} reserved for essentials</div>
+    </article>
+    <article class="kpi-card">
+      <div class="kpi-label">Monthly allowance</div>
+      <div class="kpi-value money">{{ kpis.income }}</div>
+      <div class="kpi-note">Next on {{ runway.next_income_str }}</div>
+    </article>
+    <article class="kpi-card">
+      <div class="kpi-label">Spent this month</div>
+      <div class="kpi-value money">{{ kpis.expenses }}</div>
+      <div class="kpi-note">Across 12 transactions</div>
+    </article>
+    <article class="kpi-card">
+      <div class="kpi-label">Saved in goals</div>
+      <div class="kpi-value money">{{ kpis.savings }}</div>
+      <div class="kpi-note">3 active goals</div>
+    </article>
+  </section>
+
+  <!-- 3. Asymmetric Editorial Split: One Spending Chart + 5 Recent Transactions -->
+  <section class="home-editorial-split">
+    <article class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Where your money went</h2>
+          <p class="card-subtitle">November spending by category</p>
+        </div>
+        <a href="/budgets" class="nav-link" style="padding: 4px 0; font-size: 0.85rem;">View budgets →</a>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="homeSpendingChart" aria-label="Spending breakdown by category" role="img"></canvas>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Recent transactions</h2>
+          <p class="card-subtitle">Latest 5 hostel & UPI entries</p>
+        </div>
+        <a href="/expenses" class="nav-link" style="padding: 4px 0; font-size: 0.85rem;">All expenses →</a>
+      </div>
+      <div class="tx-list">
+        {% for tx in recent_transactions %}
+          <div class="tx-row">
+            <div>
+              <div class="tx-title">{{ tx.merchant }}</div>
+              <div class="meta-line">
+                <span>{{ tx.category }}</span>
+                <span aria-hidden="true">·</span>
+                <span>{{ tx.date }}</span>
+                <span aria-hidden="true">·</span>
+                <span>{{ tx.method }}</span>
+              </div>
+            </div>
+            <div class="tx-amount money">{{ tx.amount_formatted }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <!-- 4. Monthly Summary Paragraph + 2 Insight Cards -->
+  <section class="home-bottom-split">
+    <article class="card-tint">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Monthly summary</h2>
+          <p class="card-subtitle">Plain-language check-in</p>
+        </div>
+      </div>
+      <p class="summary-prose">{{ monthly_summary }}</p>
+      <div style="margin-top: 16px;">
+        <a href="/money-buddy" class="btn btn-secondary btn-sm">Explore in Money Buddy</a>
+      </div>
+    </article>
+
+    <div class="insights-stack" aria-label="Spending insights">
+      {% for insight in insights %}
+        <article class="insight-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+            <h3 style="font-size: 1.08rem;">{{ insight.title }}</h3>
+            {{ Pill(insight.metric, tone=insight.tone) }}
+          </div>
+          <p style="font-size: 0.92rem; color: var(--ink-muted);">{{ insight.body }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.SPENDSENSE_HOME_CHART = {{ chart_data | tojson }};
+</script>
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/js/charts.js"></script>
+{% endblock %}

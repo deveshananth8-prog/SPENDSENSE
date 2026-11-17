@@ -1,0 +1,60 @@
+{% macro illustration(name, class_name="") %}
+  {% if name == "jar" %}
+  <svg class="illus {{ class_name }}" viewBox="0 0 160 140" width="160" height="140" fill="none" aria-hidden="true">
+    <ellipse cx="80" cy="126" rx="44" ry="7" fill="var(--surface-2)"/>
+    <!-- Falling coins -->
+    <circle cx="72" cy="22" r="10" fill="var(--butter)" stroke="var(--ink)" stroke-width="1.75"/>
+    <path d="M69 19h6M69 22h5M71 22l4 4" stroke="var(--ink)" stroke-width="1.4" stroke-linecap="round"/>
+    <circle cx="94" cy="36" r="8" fill="var(--primary)" stroke="var(--ink)" stroke-width="1.75"/>
+    <!-- Jar neck & lid -->
+    <rect x="52" y="46" width="56" height="10" rx="4" fill="var(--surface-2)" stroke="var(--ink)" stroke-width="1.75"/>
+    <rect x="44" y="56" width="72" height="66" rx="16" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.75"/>
+    <!-- Coins inside jar -->
+    <path d="M46 92c14-5 24 4 36 0s22-5 32 0v18a12 12 0 0 1-12 12H58a12 12 0 0 1-12-12V92Z" fill="var(--butter)" opacity="0.82"/>
+    <circle cx="65" cy="105" r="7" fill="var(--primary)" stroke="var(--ink)" stroke-width="1.5"/>
+    <circle cx="84" cy="108" r="7" fill="var(--ok)" stroke="var(--ink)" stroke-width="1.5"/>
+    <circle cx="98" cy="101" r="6" fill="var(--lavender)" stroke="var(--ink)" stroke-width="1.5"/>
+    <!-- Jar highlight -->
+    <path d="M55 68v34" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  {% elif name == "plant" %}
+  <svg class="illus {{ class_name }}" viewBox="0 0 140 130" width="140" height="130" fill="none" aria-hidden="true">
+    <ellipse cx="70" cy="118" rx="36" ry="6" fill="var(--surface-2)"/>
+    <!-- Pot -->
+    <path d="M45 78h50l-6 36a4 4 0 0 1-4 3H55a4 4 0 0 1-4-3l-6-36Z" fill="var(--primary)" stroke="var(--ink)" stroke-width="1.75"/>
+    <rect x="41" y="70" width="58" height="10" rx="4" fill="var(--surface-2)" stroke="var(--ink)" stroke-width="1.75"/>
+    <!-- Stem & Leaves -->
+    <path d="M70 70V34" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M70 54c-16-2-26-14-24-24 14-2 24 8 24 24Z" fill="var(--ok)" stroke="var(--ink)" stroke-width="1.75"/>
+    <path d="M70 43c16-4 26-14 23-24-13-1-23 9-23 24Z" fill="var(--ok)" stroke="var(--ink)" stroke-width="1.75"/>
+    <!-- Sun coin -->
+    <circle cx="105" cy="24" r="10" fill="var(--butter)" stroke="var(--ink)" stroke-width="1.5"/>
+  </svg>
+  {% elif name == "notebook" %}
+  <svg class="illus {{ class_name }}" viewBox="0 0 150 120" width="150" height="120" fill="none" aria-hidden="true">
+    <rect x="22" y="16" width="96" height="88" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.75"/>
+    <path d="M42 16v88" stroke="var(--primary)" stroke-width="1.5"/>
+    <path d="M52 36h52M52 52h46M52 68h50M52 84h34" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/>
+    <!-- Spiral rings -->
+    <circle cx="22" cy="32" r="4" fill="var(--surface-2)" stroke="var(--ink)" stroke-width="1.5"/>
+    <circle cx="22" cy="52" r="4" fill="var(--surface-2)" stroke="var(--ink)" stroke-width="1.5"/>
+    <circle cx="22" cy="72" r="4" fill="var(--surface-2)" stroke="var(--ink)" stroke-width="1.5"/>
+    <circle cx="22" cy="92" r="4" fill="var(--surface-2)" stroke="var(--ink)" stroke-width="1.5"/>
+    <!-- Pen -->
+    <path d="M112 76l20-34 8 5-20 34-10 5 2-10Z" fill="var(--butter)" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
+  </svg>
+  {% elif name == "coins" %}
+  <svg class="illus {{ class_name }}" viewBox="0 0 140 110" width="140" height="110" fill="none" aria-hidden="true">
+    <ellipse cx="70" cy="96" rx="48" ry="6" fill="var(--surface-2)"/>
+    <!-- Coin stack left -->
+    <rect x="24" y="54" width="38" height="36" rx="6" fill="var(--lavender)" stroke="var(--ink)" stroke-width="1.75"/>
+    <path d="M24 66h38M24 78h38" stroke="var(--ink)" stroke-width="1.4"/>
+    <!-- Coin stack center -->
+    <rect x="52" y="34" width="40" height="56" rx="6" fill="var(--butter)" stroke="var(--ink)" stroke-width="1.75"/>
+    <path d="M52 48h40M52 62h40M52 76h40" stroke="var(--ink)" stroke-width="1.4"/>
+    <!-- Floating coin -->
+    <circle cx="106" cy="40" r="14" fill="var(--primary)" stroke="var(--ink)" stroke-width="1.75"/>
+    <path d="M101 36h10M101 40h8M104 40l5 6" stroke="var(--on-primary)" stroke-width="1.6" stroke-linecap="round"/>
+  </svg>
+  {% endif %}
+{% endmacro %}

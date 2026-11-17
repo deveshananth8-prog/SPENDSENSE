@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "macros.html" import ProgressBar, Pill, Modal, Input %}
+
+{% block title %}Budgets — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <div class="meta-line">
+        <span>November 2026</span>
+        <span aria-hidden="true">·</span>
+        <span>{{ total_spent_formatted }} spent of {{ total_limit_formatted }}</span>
+      </div>
+      <h1 class="page-title">Monthly Budgets</h1>
+      <p class="page-lead">Soft category caps that keep your allowance steady without micromanaging every chai.</p>
+    </div>
+    <button type="button" class="btn btn-secondary" data-modal-open="edit-budget-modal">
+      <i data-lucide="sliders-horizontal" aria-hidden="true" width="16" height="16"></i>
+      <span>Adjust a budget</span>
+    </button>
+  </div>
+
+  <!-- Overall Progress Banner -->
+  <section class="card-tint" style="margin-bottom: 24px;">
+    <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+      <div>
+        <div style="font-size: 0.85rem; color: var(--ink-muted);">Overall monthly budget used</div>
+        <strong style="font-family: var(--font-display); font-size: 1.5rem;" class="money">{{ total_spent_formatted }} / {{ total_limit_formatted }}</strong>
+      </div>
+      <span style="font-size: 0.92rem; color: var(--ink-muted);">
+        <strong class="money" style="color: var(--ink);">{{ total_remaining_formatted }}</strong> left across 9 categories ({{ total_pct }}%)
+      </span>
+    </div>
+    {{ ProgressBar(total_pct, tone="primary", label="Overall budget used") }}
+  </section>
+
+  <!-- Per-category Grid -->
+  <section class="budgets-grid" aria-label="Category budgets">
+    {% for b in budgets %}
+      <article class="card">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+          <h2 style="font-size: 1.15rem;">{{ b.category }}</h2>
+          {{ Pill(b.status_label, tone=b.tone) }}
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+          <span class="money" style="font-family: var(--font-display); font-size: 1.35rem; font-weight: 600;">{{ b.spent_formatted }}</span>
+          <span class="money" style="font-size: 0.86rem; color: var(--ink-muted);">of {{ b.limit_formatted }} ({{ b.raw_pct }}%)</span>
+        </div>
+        {{ ProgressBar(b.pct, tone=b.tone, label=b.category + " budget") }}
+        <div style="margin-top: 10px; font-size: 0.84rem; color: var(--ink-muted);">
+          <span class="money">{{ b.remaining_formatted }}</span> remaining this month
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+
+  {% call Modal("edit-budget-modal", "Adjust category budget", "Stage 1 UI preview") %}
+    <form class="stack-md" onsubmit="event.preventDefault(); document.getElementById('edit-budget-modal').hidden = true;">
+      <div class="field">
+        <label class="field-label" for="budget-cat-select">Category</label>
+        <select id="budget-cat-select" class="select">
+          {% for b in budgets %}
+            <option value="{{ b.category }}">{{ b.category }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {{ Input("limit", "Monthly limit", value="2200", type="number", min="0", step="50", prefix="₹") }}
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" data-modal-close="edit-budget-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save limit</button>
+      </div>
+    </form>
+  {% endcall %}
+</div>
+{% endblock %}

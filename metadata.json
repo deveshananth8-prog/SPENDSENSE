@@ -1,0 +1,6 @@
+{
+  "name": "SpendSense",
+  "description": "An AI money companion for students and young adults — tells you whether you can afford something before you spend, and warns you before you run out of money.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

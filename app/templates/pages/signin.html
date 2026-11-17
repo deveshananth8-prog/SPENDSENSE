@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros.html" import Button, Input %}
+
+{% block title %}Sign in — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <section class="auth-wrap card" aria-labelledby="signin-title">
+    <div style="margin-bottom: 20px;">
+      <p class="meta-line" style="margin-bottom: 6px;">Welcome back</p>
+      <h1 id="signin-title" style="font-size: 1.85rem;">Sign in to SpendSense</h1>
+      <p class="card-subtitle">Stage 1 UI preview — jump straight into Riya's sample profile or explore the form.</p>
+    </div>
+
+    <div class="state-banner" id="signin-feedback" hidden style="margin-bottom: 16px;">
+      <span id="signin-feedback-text"></span>
+    </div>
+
+    <form id="signin-form" class="stack-md" novalidate>
+      {{ Input("email", "Email address", type="email", placeholder="riya@hostelmail.in", required=True) }}
+      {{ Input("password", "Password", type="password", placeholder="At least 8 characters", required=True) }}
+      <button type="submit" class="btn btn-primary" style="width: 100%;">Sign in</button>
+    </form>
+
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
+      {{ Button("Try the demo as Riya (INR)", variant="secondary", href="/home", icon="sparkles") }}
+      <p style="font-size: 0.88rem; color: var(--ink-muted); text-align: center;">
+        New here? <a href="/signup" style="color: var(--primary); font-weight: 600;">Create an account</a>
+      </p>
+    </div>
+  </section>
+</div>
+{% endblock %}

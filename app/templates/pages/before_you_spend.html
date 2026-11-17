@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% from "macros.html" import Input, Button, Pill %}
+{% from "partials/illustrations.html" import illustration %}
+
+{% block title %}Before You Spend — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <div class="meta-line">
+        <span>Affordability Simulator</span>
+        <span aria-hidden="true">·</span>
+        <span>Deterministic check in {{ user.currency }}</span>
+      </div>
+      <h1 class="page-title">Before You Spend</h1>
+      <p class="page-lead">Test any purchase against your upcoming essentials and daily comfort floor before you tap pay.</p>
+    </div>
+  </div>
+
+  <div class="bys-layout">
+    <!-- Inputs Column -->
+    <section class="card" aria-labelledby="bys-inputs-title">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title" id="bys-inputs-title">Your scenario</h2>
+          <p class="card-subtitle">Pre-filled from Riya's November numbers</p>
+        </div>
+        <div>
+          <label class="sr-only" for="full-currency">Currency</label>
+          <select id="full-currency" class="select" style="min-height: 36px; padding: 4px 10px; font-size: 0.84rem;" data-bys-currency>
+            {% for c in currencies %}
+              <option value="{{ c.code }}" data-symbol="{{ c.symbol }}" data-locale="{{ c.locale }}" data-precision="{{ c.precision }}" data-rate="{{ c.rate_from_inr }}" {{ 'selected' if c.code == 'INR' else '' }}>
+                {{ c.code }} ({{ c.symbol }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <form id="full-bys-form" data-bys-root="full" class="stack-md" novalidate>
+        {{ Input("item_name", "What are you thinking of buying?", value=default_item, placeholder="e.g. Headphones, Goa bus ticket, textbook", id="full-item") }}
+        {{ Input("purchase", "Purchase price", value="1199", type="number", min="0", step="1", prefix="₹", id="full-purchase") }}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          {{ Input("balance", "Current balance", value="2480", type="number", min="0", step="1", prefix="₹", id="full-balance") }}
+          {{ Input("essentials", "Upcoming essentials", value="850", type="number", min="0", step="1", prefix="₹", id="full-essentials") }}
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          {{ Input("days", "Days until next income", value="12", type="number", min="1", max="365", step="1", id="full-days") }}
+          {{ Input("threshold", "Daily comfort floor", value="100", type="number", min="0", step="1", prefix="₹", id="full-threshold", hint="Tight if daily allowance falls below this.") }}
+        </div>
+      </form>
+    </section>
+
+    <!-- Results Column -->
+    <div class="stack-md">
+      <section class="card" aria-live="polite">
+        <div class="verdict-box tone-{{ sim.verdict_tone }}" id="full-verdict-box" style="margin-top: 0;">
+          <div class="verdict-head">
+            <div>
+              <div style="font-size: 0.82rem; color: var(--ink-muted);">Verdict for <span id="full-item-preview">{{ default_item }}</span></div>
+              <strong id="full-verdict-label" style="font-family: var(--font-display); font-size: 1.75rem;">{{ sim.verdict }}</strong>
+            </div>
+            <span class="pill pill-{{ sim.verdict_tone }}" id="full-verdict-pill">
+              <span id="full-verdict-pill-text">{{ sim.verdict }}</span>
+            </span>
+          </div>
+          <p id="full-verdict-summary" style="margin-top: 8px; font-size: 0.95rem;">{{ sim.verdict_summary }}</p>
+
+          <div class="verdict-metrics">
+            <div>
+              <div class="verdict-metric-label">Safe to spend</div>
+              <div class="verdict-metric-val money" id="full-safe-val">{{ sim.formatted.safe_to_spend }}</div>
+            </div>
+            <div>
+              <div class="verdict-metric-label">Left after buying</div>
+              <div class="verdict-metric-val money" id="full-left-val">{{ sim.formatted.left_after_buying }}</div>
+            </div>
+            <div>
+              <div class="verdict-metric-label">Daily after buying</div>
+              <div class="verdict-metric-val money" id="full-daily-val">{{ sim.formatted.daily_after }}/day</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Before / After Comparison Bar -->
+        <div style="margin-top: 20px;">
+          <h3 style="font-size: 1rem; margin-bottom: 8px;">Daily allowance before vs after</h3>
+          <div class="before-after-bar">
+            <div class="bar-row">
+              <span>Before</span>
+              <div class="progress-track">
+                <div class="progress-fill" id="full-bar-before" style="width: 100%;"></div>
+              </div>
+              <strong class="money" id="full-bar-before-val">{{ sim.formatted.daily_before }}/day</strong>
+            </div>
+            <div class="bar-row">
+              <span>After</span>
+              <div class="progress-track">
+                <div class="progress-fill tone-{{ sim.verdict_tone }}" id="full-bar-after" style="width: 26%;"></div>
+              </div>
+              <strong class="money" id="full-bar-after-val">{{ sim.formatted.daily_after }}/day</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- How we calculated this -->
+        <div class="formula-box" aria-label="How we calculated this">
+          <h3 style="font-size: 0.96rem; margin-bottom: 8px;">How we calculated this</h3>
+          <div class="formula-line">
+            <span>1. Safe to spend (balance − essentials)</span>
+            <strong class="money" id="calc-safe">{{ sim.formatted.balance }} − {{ sim.formatted.essentials }} = {{ sim.formatted.safe_to_spend }}</strong>
+          </div>
+          <div class="formula-line">
+            <span>2. Left after buying (safe − purchase)</span>
+            <strong class="money" id="calc-left">{{ sim.formatted.safe_to_spend }} − {{ sim.formatted.purchase }} = {{ sim.formatted.left_after_buying }}</strong>
+          </div>
+          <div class="formula-line">
+            <span>3. Daily allowance (left ÷ {{ sim.days }} days)</span>
+            <strong class="money" id="calc-daily">{{ sim.formatted.daily_after }}/day</strong>
+          </div>
+          <div class="formula-line">
+            <span>4. Your daily comfort floor</span>
+            <strong class="money" id="calc-floor">{{ sim.formatted.tight_threshold }}/day</strong>
+          </div>
+        </div>
+
+        <!-- Save as a goal instead -->
+        <div style="margin-top: 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="save-as-goal-btn">
+            <i data-lucide="target" aria-hidden="true" width="16" height="16"></i>
+            <span>Save as a goal instead</span>
+          </button>
+          <span style="font-size: 0.88rem; color: var(--ink-muted);">Rather keep your runway green?</span>
+        </div>
+        <div class="state-banner" id="goal-saved-banner" hidden style="margin-top: 12px;">
+          <span id="goal-saved-text">Added to your Stage 1 goal preview!</span>
+          <a href="/goals" style="color: var(--primary); font-weight: 600;">View goals →</a>
+        </div>
+      </section>
+
+      <!-- 3 Alternatives -->
+      <section aria-label="Alternatives">
+        <h2 style="font-size: 1.2rem; margin-bottom: 12px;">Three ways to make it easier</h2>
+        <div class="alternatives-grid">
+          <article class="alt-card">
+            <div class="meta-line" style="margin-bottom: 4px;">Option A</div>
+            <h3 style="font-size: 1.02rem; margin-bottom: 6px;" id="alt-wait-title">
+              {% if sim.wait_days == 0 %}Buy anytime{% elif sim.wait_until_income %}Wait {{ sim.wait_days }} days (next income){% else %}Wait {{ sim.wait_days }} days{% endif %}
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--ink-muted);" id="alt-wait-desc">
+              Waiting until your next allowance keeps your daily comfort floor intact.
+            </p>
+          </article>
+          <article class="alt-card">
+            <div class="meta-line" style="margin-bottom: 4px;">Option B</div>
+            <h3 style="font-size: 1.02rem; margin-bottom: 6px;">Cheaper option</h3>
+            <p style="font-size: 0.85rem; color: var(--ink-muted);">
+              Keep price at or below <strong class="money" id="alt-cheaper-val">{{ sim.formatted.cheaper_max }}</strong> to stay Comfortable.
+            </p>
+          </article>
+          <article class="alt-card">
+            <div class="meta-line" style="margin-bottom: 4px;">Option C</div>
+            <h3 style="font-size: 1.02rem; margin-bottom: 6px;">Split in two</h3>
+            <p style="font-size: 0.85rem; color: var(--ink-muted);">
+              Pay <strong class="money" id="alt-split-part">{{ sim.formatted.first_payment }}</strong> now and later — leaves <strong class="money" id="alt-split-daily">{{ sim.formatted.daily_after_first }}/day</strong>.
+            </p>
+          </article>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/affordability.js"></script>
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "macros.html" import Button, Pill, Input %}
+{% from "partials/illustrations.html" import illustration %}
+
+{% block title %}SpendSense — Know Before You Spend{% endblock %}
+
+{% block content %}
+<div class="container">
+  <section class="landing-hero">
+    <div>
+      <p class="landing-kicker">Money companion for students & young adults</p>
+      <h1 class="landing-title">Know if you can afford it before you pay.</h1>
+      <p class="landing-story">
+        Other apps tell you where your money went; SpendSense tells you whether you can afford something
+        <strong>before</strong> you spend, and warns you <strong>before</strong> you run out of money.
+      </p>
+
+      <div class="landing-cta-row">
+        {{ Button("Try the demo", variant="primary", href="/home", icon="arrow-right") }}
+        {{ Button("Create account", variant="secondary", href="/signup") }}
+        {{ Button("Sign in", variant="ghost", href="/signin") }}
+      </div>
+
+      <div class="landing-hero-art">
+        {{ illustration("jar") }}
+        <div>
+          <h2 style="font-size: 1.05rem; margin-bottom: 4px;">Built for hostel life, allowances & UPI</h2>
+          <p style="font-size: 0.9rem; color: var(--ink-muted);">
+            Try Riya's ₹6,000 hostel allowance sample in one click, or test your own numbers in any currency right here.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <aside class="mini-bys-card" id="mini-simulator" aria-labelledby="mini-bys-heading">
+      <div class="card-header" style="margin-bottom: 8px;">
+        <div>
+          <h2 class="card-title" id="mini-bys-heading">Before You Spend</h2>
+          <p class="card-subtitle">Live affordability check using your real buffer</p>
+        </div>
+        <div>
+          <label class="sr-only" for="mini-currency">Currency</label>
+          <select id="mini-currency" class="select" style="min-height: 36px; padding: 4px 10px; font-size: 0.84rem;" data-bys-currency>
+            {% for c in currencies %}
+              <option value="{{ c.code }}" data-symbol="{{ c.symbol }}" data-locale="{{ c.locale }}" data-precision="{{ c.precision }}" data-rate="{{ c.rate_from_inr }}" {{ 'selected' if c.code == 'INR' else '' }}>
+                {{ c.code }} ({{ c.symbol }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <form id="mini-bys-form" data-bys-root="mini" novalidate>
+        <div class="mini-bys-grid">
+          {{ Input("balance", "Current balance", value="2480", type="number", min="0", step="1", id="mini-balance", prefix="₹") }}
+          {{ Input("essentials", "Upcoming essentials", value="850", type="number", min="0", step="1", id="mini-essentials", prefix="₹") }}
+          {{ Input("purchase", "Purchase amount", value="499", type="number", min="0", step="1", id="mini-purchase", prefix="₹") }}
+          {{ Input("days", "Days until next income", value="12", type="number", min="1", max="365", step="1", id="mini-days") }}
+        </div>
+        <input type="hidden" id="mini-threshold" value="100" />
+      </form>
+
+      <div class="verdict-box tone-{{ sim.verdict_tone }}" id="mini-verdict-box" aria-live="polite">
+        <div class="verdict-head">
+          <div>
+            <div style="font-size: 0.78rem; color: var(--ink-muted);">Verdict</div>
+            <strong id="mini-verdict-label" style="font-family: var(--font-display); font-size: 1.35rem;">{{ sim.verdict }}</strong>
+          </div>
+          <span class="pill pill-{{ sim.verdict_tone }}" id="mini-verdict-pill">
+            <span id="mini-verdict-pill-text">{{ sim.verdict }}</span>
+          </span>
+        </div>
+        <p id="mini-verdict-summary" style="font-size: 0.88rem; margin-top: 6px; color: var(--ink);">{{ sim.verdict_summary }}</p>
+
+        <div class="verdict-metrics">
+          <div>
+            <div class="verdict-metric-label">Safe to spend</div>
+            <div class="verdict-metric-val money" id="mini-safe-val">{{ sim.formatted.safe_to_spend }}</div>
+          </div>
+          <div>
+            <div class="verdict-metric-label">Left after buying</div>
+            <div class="verdict-metric-val money" id="mini-left-val">{{ sim.formatted.left_after_buying }}</div>
+          </div>
+          <div>
+            <div class="verdict-metric-label">Daily allowance after</div>
+            <div class="verdict-metric-val money" id="mini-daily-val">{{ sim.formatted.daily_after }}/day</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <span style="font-size: 0.8rem; color: var(--ink-muted);">Comfort floor: <strong id="mini-threshold-label" class="money">₹100.00</strong>/day</span>
+        <a href="/before-you-spend" class="nav-link" style="padding: 0;">Open full simulator →</a>
+      </div>
+    </aside>
+  </section>
+
+  <section class="landing-benefits" id="how-it-works" aria-label="Core capabilities">
+    <article class="card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+        <div>
+          <div class="benefit-num">01. Before You Spend</div>
+          <h2 class="benefit-title">Check any impulse buy in 5 seconds</h2>
+          <p class="benefit-body">
+            Subtract upcoming mess fees, recharges, and rent first. See the exact daily allowance you will have left — plus practical alternatives like waiting a few days or splitting it.
+          </p>
+        </div>
+        {{ illustration("coins") }}
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="benefit-num">02. Money Runway</div>
+      <h2 class="benefit-title">See when your allowance runs out</h2>
+      <p class="benefit-body">
+        Your recent daily pace mapped onto a clear timeline from today to your next income date, warning you days before your buffer gets tight.
+      </p>
+    </article>
+
+    <article class="card">
+      <div class="benefit-num">03. Money Buddy</div>
+      <h2 class="benefit-title">A calm notebook, not a noisy bank</h2>
+      <p class="benefit-body">
+        Ask plain questions in English or Hinglish. Every answer shows the exact numbers behind it so you always stay in control.
+      </p>
+    </article>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/affordability.js"></script>
+{% endblock %}

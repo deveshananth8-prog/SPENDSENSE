@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "macros.html" import ProgressBar, Modal, Input %}
+{% from "partials/illustrations.html" import illustration %}
+
+{% block title %}Goals — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <div class="meta-line">
+        <span>Savings Goals</span>
+        <span aria-hidden="true">·</span>
+        <span><strong class="money">{{ total_saved_formatted }}</strong> saved toward {{ total_target_formatted }}</span>
+      </div>
+      <h1 class="page-title">Your Goals</h1>
+      <p class="page-lead">Turn skipped impulse buys into things you genuinely want later.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-modal-open="add-goal-modal">
+      <i data-lucide="plus" aria-hidden="true" width="16" height="16"></i>
+      <span>New goal</span>
+    </button>
+  </div>
+
+  <section class="goals-grid" aria-label="Active savings goals" id="goals-grid">
+    {% for g in goals %}
+      <article class="card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 16px;">
+        <div>
+          <div class="meta-line" style="margin-bottom: 6px;">
+            <span>Target date · {{ g.deadline }}</span>
+          </div>
+          <h2 style="font-size: 1.25rem; margin-bottom: 6px;">{{ g.title }}</h2>
+          <p style="font-size: 0.88rem; color: var(--ink-muted);">{{ g.note }}</p>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+            <span class="money" style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 600;">{{ g.saved_formatted }}</span>
+            <span class="money" style="font-size: 0.85rem; color: var(--ink-muted);">of {{ g.target_formatted }} ({{ g.pct }}%)</span>
+          </div>
+          {{ ProgressBar(g.pct, tone="primary", label=g.title) }}
+          <div style="margin-top: 10px; font-size: 0.84rem; color: var(--ink-muted);">
+            <span class="money">{{ g.remaining_formatted }}</span> still to go
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+
+  <section class="card-tint" style="margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 24px;">
+    {{ illustration("plant") }}
+    <div style="flex: 1; min-width: 240px;">
+      <h2 style="font-size: 1.25rem; margin-bottom: 6px;">Small pauses compound quickly</h2>
+      <p style="color: var(--ink-muted); font-size: 0.94rem;">
+        Every time you choose "Wait" or "Save as a goal instead" in Before You Spend, SpendSense keeps that buffer visible here.
+      </p>
+    </div>
+    <a href="/before-you-spend" class="btn btn-secondary">Test a purchase</a>
+  </section>
+
+  {% call Modal("add-goal-modal", "Create a savings goal", "Stage 1 UI preview") %}
+    <form id="goal-modal-form" class="stack-md">
+      {{ Input("title", "Goal name", placeholder="e.g. Semester exam books, Hostel bicycle", required=True, id="goal-title-input") }}
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        {{ Input("target", "Target amount", type="number", min="1", step="1", prefix="₹", required=True, id="goal-target-input") }}
+        {{ Input("saved", "Already saved", type="number", min="0", step="1", value="0", prefix="₹", id="goal-saved-input") }}
+      </div>
+      {{ Input("deadline", "Target date", type="date", value="2027-02-01", required=True, id="goal-date-input") }}
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" data-modal-close="add-goal-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create goal</button>
+      </div>
+    </form>
+  {% endcall %}
+</div>
+{% endblock %}

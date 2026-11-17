@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "macros.html" import Button, Input, CurrencyPicker %}
+
+{% block title %}Create account — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <section class="auth-wrap card" aria-labelledby="signup-title">
+    <div style="margin-bottom: 20px;">
+      <p class="meta-line" style="margin-bottom: 6px;">Start in 30 seconds</p>
+      <h1 id="signup-title" style="font-size: 1.85rem;">Create your account</h1>
+      <p class="card-subtitle">Choose your working currency — you can switch or adjust it anytime later.</p>
+    </div>
+
+    <div class="state-banner" id="signup-feedback" hidden style="margin-bottom: 16px;">
+      <span id="signup-feedback-text"></span>
+    </div>
+
+    <form id="signup-form" class="stack-md" novalidate>
+      {{ Input("name", "Full name", placeholder="Riya Sharma", required=True) }}
+      {{ Input("email", "Email address", type="email", placeholder="riya@hostelmail.in", required=True) }}
+      <div class="field">
+        <span class="field-label">Working currency</span>
+        {{ CurrencyPicker(currencies, selected_code="INR", input_name="currency", id_prefix="signup-cp") }}
+      </div>
+      {{ Input("password", "Password", type="password", placeholder="Minimum 8 characters", required=True, hint="Minimum 8 characters.") }}
+      {{ Input("confirm_password", "Confirm password", type="password", placeholder="Re-enter password", required=True) }}
+      <button type="submit" class="btn btn-primary" style="width: 100%;">Create account</button>
+    </form>
+
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
+      {{ Button("Try the demo first", variant="secondary", href="/home") }}
+      <p style="font-size: 0.88rem; color: var(--ink-muted); text-align: center;">
+        Already have an account? <a href="/signin" style="color: var(--primary); font-weight: 600;">Sign in</a>
+      </p>
+    </div>
+  </section>
+</div>
+{% endblock %}

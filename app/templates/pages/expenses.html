@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% from "macros.html" import Button, Input, Modal, EmptyState %}
+
+{% block title %}Expenses — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <div class="meta-line">
+        <span>November 2026</span>
+        <span aria-hidden="true">·</span>
+        <span>Total: <strong class="money" id="expenses-total-label">{{ total_formatted }}</strong></span>
+        <span aria-hidden="true">·</span>
+        <span id="expenses-count-label">{{ count }} entries</span>
+      </div>
+      <h1 class="page-title">Expenses</h1>
+    </div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <button type="button" class="btn btn-primary" data-modal-open="add-expense-modal">
+        <i data-lucide="plus" aria-hidden="true" width="16" height="16"></i>
+        <span>Add expense</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Quick Add Box (SMS paste or natural text like "chai 20") -->
+  <section class="quick-add-card" aria-labelledby="quick-add-heading">
+    <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px;">
+      <div>
+        <h2 id="quick-add-heading" style="font-size: 1.1rem;">Quick Add</h2>
+        <p style="font-size: 0.86rem; color: var(--ink-muted);">Type something like <code>chai 20</code> or paste an Indian bank/UPI SMS alert.</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="fill-sms-sample-btn">Try sample UPI SMS</button>
+    </div>
+    <form id="quick-add-form" class="quick-add-row">
+      <label class="sr-only" for="quick-add-input">Quick add text or SMS</label>
+      <input
+        type="text"
+        id="quick-add-input"
+        class="input"
+        placeholder='e.g. "chai 20" or "Rs 245.00 debited via UPI to Zomato on 16-Nov"'
+      />
+      <button type="submit" class="btn btn-primary">Parse & preview</button>
+    </form>
+
+    <!-- Editable confirmation preview -->
+    <div id="quick-add-preview" class="card" hidden style="margin-top: 14px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+        <strong>Review before adding</strong>
+        <span style="font-size: 0.8rem; color: var(--ink-muted);">Parsed locally (Stage 1 UI preview)</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 10px; align-items: end;">
+        <div class="field">
+          <label class="field-label" for="qa-merchant">Merchant / Note</label>
+          <input type="text" id="qa-merchant" class="input" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="qa-amount">Amount (₹)</label>
+          <input type="number" id="qa-amount" class="input num" min="1" step="1" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="qa-category">Category</label>
+          <select id="qa-category" class="select">
+            {% for cat in categories %}
+              <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-primary" id="qa-confirm-btn">Add</button>
+          <button type="button" class="btn btn-ghost" id="qa-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search & Category Filter Toolbar -->
+  <div class="filter-toolbar">
+    <div class="filter-inputs">
+      <label class="sr-only" for="expense-search">Search expenses</label>
+      <input type="search" id="expense-search" class="input" placeholder="Search merchant or note..." />
+
+      <label class="sr-only" for="expense-category-filter">Filter by category</label>
+      <select id="expense-category-filter" class="select">
+        <option value="all">All categories</option>
+        {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button type="button" class="btn btn-ghost btn-sm" id="toggle-loading-demo">Preview loading</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="toggle-error-demo">Preview error</button>
+    </div>
+  </div>
+
+  <!-- Error State Demo Container -->
+  <div class="state-banner state-banner-error" id="expenses-error-state" hidden style="margin-bottom: 16px;">
+    <span>Could not refresh expenses right now. Check your connection and try again.</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="dismiss-error-demo">Retry</button>
+  </div>
+
+  <!-- Loading State Demo Container -->
+  <div id="expenses-loading-state" hidden class="stack-sm" style="margin-bottom: 16px;" aria-label="Loading expenses">
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+  </div>
+
+  <!-- Table -->
+  <div class="expenses-table-wrap" id="expenses-table-wrap">
+    <table class="expenses-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Merchant & Note</th>
+          <th>Category</th>
+          <th>Method</th>
+          <th class="num">Amount</th>
+          <th class="num">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="expenses-tbody">
+        {% for exp in expenses %}
+          <tr
+            data-expense-row
+            data-id="{{ exp.id }}"
+            data-merchant="{{ exp.merchant }}"
+            data-note="{{ exp.note }}"
+            data-category="{{ exp.category }}"
+            data-date="{{ exp.date }}"
+            data-amount-minor="{{ exp.amount_minor }}"
+          >
+            <td class="num" style="white-space: nowrap;">{{ exp.date }}</td>
+            <td>
+              <div style="font-weight: 600;">{{ exp.merchant }}</div>
+              <div style="font-size: 0.82rem; color: var(--ink-muted);">{{ exp.note }}</div>
+            </td>
+            <td>{{ exp.category }}</td>
+            <td style="color: var(--ink-muted);">{{ exp.method }}</td>
+            <td class="num money" style="font-weight: 600;">{{ exp.amount_formatted }}</td>
+            <td class="num">
+              <div class="row-actions">
+                <button type="button" class="icon-btn" data-edit-expense="{{ exp.id }}" aria-label="Edit {{ exp.merchant }}">
+                  <i data-lucide="pencil" aria-hidden="true" width="15" height="15"></i>
+                </button>
+                <button type="button" class="icon-btn" data-delete-expense="{{ exp.id }}" aria-label="Delete {{ exp.merchant }}">
+                  <i data-lucide="trash-2" aria-hidden="true" width="15" height="15"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Empty State (shown when search/filter matches nothing or all deleted) -->
+  <div id="expenses-empty-state" hidden style="margin-top: 16px;">
+    {{ EmptyState("No matching expenses", "Try clearing your search or category filter, or add a new expense.", action_label="Clear filters", action_id="clear-expense-filters", icon="search") }}
+  </div>
+
+  <!-- Add / Edit Expense Modal -->
+  {% call Modal("add-expense-modal", "Add or edit expense", "Stage 1 UI preview — updates this list in memory") %}
+    <form id="expense-modal-form" class="stack-md">
+      <input type="hidden" id="modal-exp-id" value="" />
+      {{ Input("merchant", "Merchant or title", placeholder="e.g. Campus Mess, Metro Card", required=True, id="modal-exp-merchant") }}
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        {{ Input("amount", "Amount", type="number", min="1", step="1", prefix="₹", required=True, id="modal-exp-amount") }}
+        {{ Input("date", "Date", type="date", value="2026-11-17", required=True, id="modal-exp-date") }}
+      </div>
+      <div class="field">
+        <label class="field-label" for="modal-exp-category">Category</label>
+        <select id="modal-exp-category" class="select">
+          {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {{ Input("note", "Note (optional)", placeholder="What was this for?", id="modal-exp-note") }}
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" data-modal-close="add-expense-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save expense</button>
+      </div>
+    </form>
+  {% endcall %}
+</div>
+{% endblock %}

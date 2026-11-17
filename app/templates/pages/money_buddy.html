@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "macros.html" import Button %}
+{% from "partials/illustrations.html" import illustration %}
+
+{% block title %}Money Buddy — SpendSense{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <div class="meta-line">
+        <span>Personal Money Notebook</span>
+        <span aria-hidden="true">·</span>
+        <span>Stage 1 sample preview</span>
+      </div>
+      <h1 class="page-title">Money Buddy</h1>
+      <p class="page-lead">Ask a plain question about your month. Every note cites the exact numbers behind it.</p>
+    </div>
+  </div>
+
+  <div class="notebook-layout">
+    <!-- Left Column: Suggested Chips + Ask Form -->
+    <aside class="stack-md">
+      <section class="card">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+          <h2 class="card-title" style="font-size: 1.12rem;">Suggested questions</h2>
+        </div>
+        <div class="chip-list" id="buddy-chips">
+          {% for chip in chips %}
+            <button
+              type="button"
+              class="question-chip {{ 'is-active' if loop.first else '' }}"
+              data-chip-id="{{ chip.id }}"
+              data-chip-question="{{ chip.label }}"
+              data-chip-answer="{{ chip.answer }}"
+              data-chip-next="{{ chip.next_step }}"
+              data-chip-why='{{ chip.why | tojson }}'
+            >
+              {{ chip.label }}
+            </button>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card-tint">
+        <h2 class="card-title" style="font-size: 1.08rem; margin-bottom: 8px;">Write a question in your notebook</h2>
+        <form id="buddy-ask-form" class="stack-sm">
+          <label class="sr-only" for="buddy-input">Your question</label>
+          <textarea id="buddy-input" class="textarea" rows="3" placeholder="e.g. Can I afford a weekend trip, or why did food go up?"></textarea>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="font-size: 0.78rem; color: var(--ink-muted);">Stage 1 uses sample snapshot notes</span>
+            <button type="submit" class="btn btn-primary btn-sm">Add note</button>
+          </div>
+        </form>
+      </section>
+
+      <div style="display: flex; align-items: center; gap: 16px; padding: 8px 4px;">
+        {{ illustration("notebook") }}
+        <p style="font-size: 0.85rem; color: var(--ink-muted);">
+          SpendSense gives general guidance, not professional financial advice.
+        </p>
+      </div>
+    </aside>
+
+    <!-- Right Column: Ruled Editorial Notebook -->
+    <section class="notebook-paper" aria-label="Money Buddy notebook entries" id="buddy-notebook" aria-live="polite">
+      <article class="notebook-entry" id="buddy-active-entry">
+        <div class="meta-line" style="margin-bottom: 6px;">
+          <span>Notebook entry</span>
+          <span aria-hidden="true">·</span>
+          <span>Snapshot: November 2026</span>
+        </div>
+        <h2 class="notebook-q" id="buddy-q">{{ initial_entry.label }}</h2>
+        <p class="notebook-a" id="buddy-a">{{ initial_entry.answer }}</p>
+        <div class="notebook-next">
+          <strong>Next step:</strong> <span id="buddy-next">{{ initial_entry.next_step }}</span>
+        </div>
+        <details class="why-details" open>
+          <summary>Why this answer?</summary>
+          <ul class="why-list" id="buddy-why-list">
+            {% for line in initial_entry.why %}
+              <li>{{ line }}</li>
+            {% endfor %}
+          </ul>
+        </details>
+      </article>
+    </section>
+  </div>
+</div>
+{% endblock %}

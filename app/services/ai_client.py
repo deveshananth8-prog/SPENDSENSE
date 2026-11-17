@@ -7,14 +7,17 @@ offline fallback when no key is configured or an upstream call fails.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -37,6 +40,38 @@ from data.sample_data import CATEGORIES
 logger = logging.getLogger(__name__)
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_AI_CACHE: dict[str, tuple[float, Any]] = {}
+_CACHE_TTL_SECONDS = 180.0
+_CACHE_MAX_ITEMS = 256
+
+
+def _clear_ai_cache() -> None:
+    _AI_CACHE.clear()
+
+
+def _cache_get(key: str) -> Any | None:
+    entry = _AI_CACHE.get(key)
+    if not entry:
+        return None
+    expires_at, val = entry
+    if time.monotonic() > expires_at:
+        _AI_CACHE.pop(key, None)
+        return None
+    return val
+
+
+def _cache_set(key: str, val: Any) -> None:
+    if len(_AI_CACHE) >= _CACHE_MAX_ITEMS:
+        oldest_key = next(iter(_AI_CACHE), None)
+        if oldest_key is not None:
+            _AI_CACHE.pop(oldest_key, None)
+    _AI_CACHE[key] = (time.monotonic() + _CACHE_TTL_SECONDS, val)
+
+
+def _cache_key(namespace: str, payload: Any) -> str:
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    return f"{namespace}:{settings.gemini_model}:{digest}"
 
 
 def is_ai_configured() -> bool:
@@ -60,7 +95,7 @@ def _call_gemini_json(
     contents: Any,
     response_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    """Execute a Gemini generate_content call with 10s timeout and 1 retry."""
+    """Execute a Gemini generate_content call with 10s timeout and 1 backoff retry on transient errors."""
     if not is_ai_configured():
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
@@ -69,6 +104,8 @@ def _call_gemini_json(
     last_exc: Exception | None = None
 
     for attempt in range(max_attempts):
+        if attempt > 0:
+            time.sleep(0.6)
         client = _create_gemini_client()
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
@@ -90,13 +127,23 @@ def _call_gemini_json(
             if not raw_text:
                 raise ValueError("Empty response from Gemini")
             return json.loads(raw_text)
-        except FuturesTimeoutError as exc:
+        except FuturesTimeoutError:
             future.cancel()
             last_exc = TimeoutError("Gemini request timed out after 10 seconds")
-            logger.warning("Gemini attempt %d timed out", attempt + 1)
+            logger.info("Gemini attempt %d timed out; %s", attempt + 1, "retrying" if attempt + 1 < max_attempts else "falling back")
+        except genai_errors.ClientError as exc:
+            # 4xx errors (e.g. 429 quota, 400/403 key issue) are not helped by immediate retry
+            last_exc = exc
+            logger.info("Gemini client status %s; falling back cleanly", getattr(exc, "code", ""))
+            break
         except Exception as exc:
             last_exc = exc
-            logger.warning("Gemini attempt %d failed: %s", attempt + 1, type(exc).__name__)
+            logger.info(
+                "Gemini attempt %d unavailable (%s); %s",
+                attempt + 1,
+                type(exc).__name__,
+                "retrying" if attempt + 1 < max_attempts else "falling back cleanly",
+            )
 
     raise last_exc or RuntimeError("Gemini request failed")
 
@@ -219,6 +266,11 @@ def ask_money_buddy(question: str, snapshot: dict[str, Any]) -> MoneyBuddyResult
     if not is_ai_configured():
         return _offline_money_buddy(clean_q, snapshot)
 
+    ck = _cache_key("buddy", {"q": clean_q.lower(), "snapshot": snapshot})
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
     system_instruction = (
         "You are SpendSense Money Buddy, a warm, encouraging money companion for students and young adults. "
         "STRICT RULES:\n"
@@ -252,12 +304,14 @@ def ask_money_buddy(question: str, snapshot: dict[str, Any]) -> MoneyBuddyResult
         why_list = [str(item).strip() for item in (data.get("why") or []) if str(item).strip()][:5]
         if not why_list:
             why_list = snapshot["snapshot_facts"][:3]
-        return MoneyBuddyResult(
+        result = MoneyBuddyResult(
             answer=str(data.get("answer") or "").strip() or _offline_money_buddy(clean_q, snapshot).answer,
             next_step=str(data.get("next_step") or "").strip() or "Review your Money Runway on Home before making big purchases.",
             why=why_list,
             offline_mode=False,
         )
+        _cache_set(ck, result)
+        return result
     except Exception:
         return _offline_money_buddy(clean_q, snapshot)
 
@@ -540,6 +594,11 @@ def generate_home_narrative_ai(snapshot: dict[str, Any]) -> HomeNarrativeResult:
     if not is_ai_configured():
         return offline
 
+    ck = _cache_key("home", snapshot)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
     system_instruction = (
         "You write concise, encouraging student-friendly financial summaries from <GROUNDED_SNAPSHOT_JSON>. "
         "STRICT RULES: ONLY use exact numbers and currency formats from <GROUNDED_SNAPSHOT_JSON>. "
@@ -566,11 +625,13 @@ def generate_home_narrative_ai(snapshot: dict[str, Any]) -> HomeNarrativeResult:
         for idx, ins in enumerate(offline.insights):
             new_body = str(bodies[idx]).strip() if idx < len(bodies) and str(bodies[idx]).strip() else ins["body"]
             updated_insights.append({**ins, "body": new_body})
-        return HomeNarrativeResult(
+        result = HomeNarrativeResult(
             monthly_summary=summary,
             insights=updated_insights,
             offline_mode=False,
         )
+        _cache_set(ck, result)
+        return result
     except Exception:
         return offline
 
@@ -608,6 +669,11 @@ def explain_affordability_ai(payload: dict[str, Any]) -> AffordabilityExplanatio
     if not is_ai_configured():
         return offline
 
+    ck = _cache_key("bys", payload)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
     system_instruction = (
         "Explain this Before You Spend verdict in 2 to 3 friendly, plain-language sentences using ONLY the exact computed numbers "
         "and verdict in <COMPUTED_RESULT_JSON>. Never recalculate, alter, or invent any number. "
@@ -625,6 +691,8 @@ def explain_affordability_ai(payload: dict[str, Any]) -> AffordabilityExplanatio
             response_schema=schema,
         )
         explanation = str(data.get("explanation") or "").strip() or offline.explanation
-        return AffordabilityExplanationResult(explanation=explanation, offline_mode=False)
+        result = AffordabilityExplanationResult(explanation=explanation, offline_mode=False)
+        _cache_set(ck, result)
+        return result
     except Exception:
         return offline

@@ -44,11 +44,13 @@ def stage4_env(tmp_path, monkeypatch):
             session.close()
 
     monkeypatch.setattr(settings, "gemini_api_key", "")
+    ai_client._clear_ai_cache()
     app.dependency_overrides[db_module.get_db] = override_get_db
     limiter._storage.reset()
 
     yield {"SessionLocal": TestingSessionLocal}
 
+    ai_client._clear_ai_cache()
     app.dependency_overrides.clear()
     test_engine.dispose()
 
@@ -510,3 +512,70 @@ def test_mocked_gemini_endpoints_currency_mismatch_and_merchant_memory(stage4_en
         headers={"X-CSRF-Token": "wrong-token"},
     )
     assert bad_csrf.status_code == 403
+
+
+def test_gemini_server_error_retries_and_falls_back_cleanly(stage4_env, monkeypatch):
+    from google.genai import errors as genai_errors
+
+    monkeypatch.setattr(settings, "gemini_api_key", "AIzaFakeKeyForRetryTest")
+    monkeypatch.setattr(ai_client.time, "sleep", lambda _sec: None)
+
+    attempts = {"count": 0}
+
+    def flaky_handler(*, model, contents, config):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise genai_errors.ServerError(503, {"error": {"message": "Service unavailable", "status": "UNAVAILABLE"}})
+        return {
+            "answer": "Recovered on retry using ₹6,000.00 allowance.",
+            "next_step": "Keep tracking daily expenses.",
+            "why": ["Monthly allowance: ₹6,000.00"],
+        }
+
+    fake_client = _FakeGeminiClient(flaky_handler)
+    monkeypatch.setattr(ai_client, "_create_gemini_client", lambda: fake_client)
+
+    client = TestClient(app)
+    token = _signup(client, "retry-ok@example.com", currency="INR")
+
+    # 1st call fails with 503 ServerError, 2nd attempt succeeds
+    res = client.post(
+        "/api/ai/money-buddy",
+        json={"question": "How is my budget?"},
+        headers={"X-CSRF-Token": token},
+    )
+    assert res.status_code == 200
+    assert res.json()["offline_mode"] is False
+    assert attempts["count"] == 2
+
+    # Persistent ServerError on both attempts falls back gracefully to offline mode
+    def always_503(*, model, contents, config):
+        raise genai_errors.ServerError(503, {"error": {"message": "High demand", "status": "UNAVAILABLE"}})
+
+    monkeypatch.setattr(ai_client, "_create_gemini_client", lambda: _FakeGeminiClient(always_503))
+    ai_client._clear_ai_cache()
+    res_offline = client.post(
+        "/api/ai/money-buddy",
+        json={"question": "Summarise my spending."},
+        headers={"X-CSRF-Token": token},
+    )
+    assert res_offline.status_code == 200
+    assert res_offline.json()["offline_mode"] is True
+
+    # 429 ClientError skips redundant retry and returns friendly 429 on screenshot
+    calls_429 = {"count": 0}
+
+    def always_429(*, model, contents, config):
+        calls_429["count"] += 1
+        raise genai_errors.ClientError(429, {"error": {"message": "Quota exceeded", "status": "RESOURCE_EXHAUSTED"}})
+
+    monkeypatch.setattr(ai_client, "_create_gemini_client", lambda: _FakeGeminiClient(always_429))
+    shot_429 = client.post(
+        "/api/ai/quick-add/screenshot",
+        files={"screenshot": ("pay.png", _make_png_bytes(), "image/png")},
+        headers={"X-CSRF-Token": token},
+    )
+    assert shot_429.status_code == 429
+    assert calls_429["count"] == 1
+    assert shot_429.json()["offline_mode"] is True
+

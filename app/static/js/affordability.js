@@ -111,6 +111,7 @@
 
     if (errorEl) errorEl.hidden = true;
     if (loadingEl) loadingEl.hidden = false;
+    if (textEl) textEl.hidden = true;
 
     try {
       var resp = await fetch("/api/ai/explain-affordability", {
@@ -126,17 +127,20 @@
       if (loadingEl) loadingEl.hidden = true;
       if (!resp.ok) {
         if (errorEl) errorEl.hidden = false;
+        if (textEl) textEl.hidden = false;
         return;
       }
       if (textEl && data.explanation) {
         textEl.textContent = data.explanation;
       }
+      if (textEl) textEl.hidden = false;
       if (badgeEl) {
         badgeEl.hidden = !data.offline_mode;
       }
     } catch (err) {
       if (loadingEl) loadingEl.hidden = true;
       if (errorEl) errorEl.hidden = false;
+      if (textEl) textEl.hidden = false;
     }
   }
 
@@ -298,13 +302,13 @@
       if (!form) return;
       form.addEventListener("input", function () {
         updateSimulator(prefix);
-        if (prefix === "full") scheduleAiExplanation(550);
+        if (prefix === "full") scheduleAiExplanation(1000);
       });
       var currencyEl = document.getElementById(prefix + "-currency");
       if (currencyEl) {
         currencyEl.addEventListener("change", function () {
           scaleDefaultsForCurrency(prefix);
-          if (prefix === "full") scheduleAiExplanation(300);
+          if (prefix === "full") scheduleAiExplanation(600);
         });
       }
       updateSimulator(prefix);

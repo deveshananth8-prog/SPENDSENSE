@@ -709,7 +709,7 @@
 
     function triggerCategorySuggest() {
       var desc = (((modalMerchant && modalMerchant.value) || "") + " " + ((modalNote && modalNote.value) || "")).trim();
-      if (!desc) {
+      if (desc.length < 3) {
         if (catHintBox) catHintBox.hidden = true;
         return;
       }
@@ -730,7 +730,7 @@
             catOfflineBadge.hidden = !res.data.offline_mode;
           }
         } catch (err) {}
-      }, 320);
+      }, 450);
     }
 
     if (modalMerchant) modalMerchant.addEventListener("input", triggerCategorySuggest);

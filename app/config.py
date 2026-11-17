@@ -1,7 +1,7 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-GEMINI_MODEL = "gemini-4-hydrogen"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 
 
 class Settings(BaseSettings):

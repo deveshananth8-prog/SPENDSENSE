@@ -215,10 +215,16 @@ async def api_quick_add_screenshot(
             status_code=504,
             content={"detail": "Screenshot scanning timed out after 10 seconds. Please try again or paste SMS text.", "offline_mode": False},
         )
-    except Exception:
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        if code == 429:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "AI screenshot quota reached right now. Paste the SMS or type an expense like 'chai 20' instead.", "offline_mode": True},
+            )
         return JSONResponse(
-            status_code=502,
-            content={"detail": "Could not scan the screenshot right now. Please try pasting the SMS or typing the amount.", "offline_mode": not is_ai_configured()},
+            status_code=503,
+            content={"detail": "Screenshot scanning is temporarily busy. Please try again in a moment or paste your SMS text.", "offline_mode": True},
         )
 
     return {

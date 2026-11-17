@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import Button, Input, CurrencyPicker %}
+{% from "macros.html" import Input, CurrencyPicker %}
 
 {% block title %}Create account — SpendSense{% endblock %}
 
@@ -9,19 +9,22 @@
     <div style="margin-bottom: 20px;">
       <p class="meta-line" style="margin-bottom: 6px;">Start in 30 seconds</p>
       <h1 id="signup-title" style="font-size: 1.85rem;">Create your account</h1>
-      <p class="card-subtitle">Choose your working currency — you can switch or adjust it anytime later.</p>
+      <p class="card-subtitle">Choose your working currency — you can manage everything from your profile.</p>
     </div>
 
-    <div class="state-banner" id="signup-feedback" hidden style="margin-bottom: 16px;">
-      <span id="signup-feedback-text"></span>
-    </div>
+    {% if error_msg %}
+      <div class="state-banner state-banner-error" role="alert" style="margin-bottom: 16px;">
+        <span>{{ error_msg }}</span>
+      </div>
+    {% endif %}
 
-    <form id="signup-form" class="stack-md" novalidate>
-      {{ Input("name", "Full name", placeholder="Riya Sharma", required=True) }}
-      {{ Input("email", "Email address", type="email", placeholder="riya@hostelmail.in", required=True) }}
+    <form id="signup-form" method="post" action="/signup" class="stack-md">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+      {{ Input("name", "Full name", value=form_values.name if form_values else "", placeholder="Riya Sharma", required=True) }}
+      {{ Input("email", "Email address", value=form_values.email if form_values else "", type="email", placeholder="riya@hostelmail.in", required=True) }}
       <div class="field">
         <span class="field-label">Working currency</span>
-        {{ CurrencyPicker(currencies, selected_code="INR", input_name="currency", id_prefix="signup-cp") }}
+        {{ CurrencyPicker(currencies, selected_code=form_values.currency if form_values else "INR", input_name="currency", id_prefix="signup-cp") }}
       </div>
       {{ Input("password", "Password", type="password", placeholder="Minimum 8 characters", required=True, hint="Minimum 8 characters.") }}
       {{ Input("confirm_password", "Confirm password", type="password", placeholder="Re-enter password", required=True) }}
@@ -29,7 +32,10 @@
     </form>
 
     <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
-      {{ Button("Try the demo first", variant="secondary", href="/home") }}
+      <form method="post" action="/demo" style="margin: 0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+        <button type="submit" class="btn btn-secondary" style="width: 100%;">Try the demo first</button>
+      </form>
       <p style="font-size: 0.88rem; color: var(--ink-muted); text-align: center;">
         Already have an account? <a href="/signin" style="color: var(--primary); font-weight: 600;">Sign in</a>
       </p>

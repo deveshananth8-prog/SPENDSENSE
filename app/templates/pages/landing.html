@@ -16,7 +16,13 @@
       </p>
 
       <div class="landing-cta-row">
-        {{ Button("Try the demo", variant="primary", href="/home", icon="arrow-right") }}
+        <form method="post" action="/demo" style="margin: 0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+          <button type="submit" class="btn btn-primary">
+            <i data-lucide="arrow-right" aria-hidden="true" width="16" height="16"></i>
+            <span>Try the demo</span>
+          </button>
+        </form>
         {{ Button("Create account", variant="secondary", href="/signup") }}
         {{ Button("Sign in", variant="ghost", href="/signin") }}
       </div>
@@ -26,7 +32,7 @@
         <div>
           <h2 style="font-size: 1.05rem; margin-bottom: 4px;">Built for hostel life, allowances & UPI</h2>
           <p style="font-size: 0.9rem; color: var(--ink-muted);">
-            Try Riya's ₹6,000 hostel allowance sample in one click, or test your own numbers in any currency right here.
+            Try Riya's ₹6,000 hostel allowance demo in one click, or test your own numbers in any currency right here.
           </p>
         </div>
       </div>

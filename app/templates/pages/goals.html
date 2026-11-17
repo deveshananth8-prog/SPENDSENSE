@@ -22,30 +22,38 @@
     </button>
   </div>
 
-  <section class="goals-grid" aria-label="Active savings goals" id="goals-grid">
-    {% for g in goals %}
-      <article class="card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 16px;">
-        <div>
-          <div class="meta-line" style="margin-bottom: 6px;">
-            <span>Target date · {{ g.deadline }}</span>
+  {% if goals %}
+    <section class="goals-grid" aria-label="Active savings goals" id="goals-grid">
+      {% for g in goals %}
+        <article class="card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 16px;">
+          <div>
+            <div class="meta-line" style="margin-bottom: 6px;">
+              <span>Target date · {{ g.deadline }}</span>
+            </div>
+            <h2 style="font-size: 1.25rem; margin-bottom: 6px;">{{ g.title }}</h2>
+            <p style="font-size: 0.88rem; color: var(--ink-muted);">{{ g.note }}</p>
           </div>
-          <h2 style="font-size: 1.25rem; margin-bottom: 6px;">{{ g.title }}</h2>
-          <p style="font-size: 0.88rem; color: var(--ink-muted);">{{ g.note }}</p>
-        </div>
 
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
-            <span class="money" style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 600;">{{ g.saved_formatted }}</span>
-            <span class="money" style="font-size: 0.85rem; color: var(--ink-muted);">of {{ g.target_formatted }} ({{ g.pct }}%)</span>
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+              <span class="money" style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 600;">{{ g.saved_formatted }}</span>
+              <span class="money" style="font-size: 0.85rem; color: var(--ink-muted);">of {{ g.target_formatted }} ({{ g.pct }}%)</span>
+            </div>
+            {{ ProgressBar(g.pct, tone="primary", label=g.title) }}
+            <div style="margin-top: 10px; font-size: 0.84rem; color: var(--ink-muted);">
+              <span class="money">{{ g.remaining_formatted }}</span> still to go
+            </div>
           </div>
-          {{ ProgressBar(g.pct, tone="primary", label=g.title) }}
-          <div style="margin-top: 10px; font-size: 0.84rem; color: var(--ink-muted);">
-            <span class="money">{{ g.remaining_formatted }}</span> still to go
-          </div>
-        </div>
-      </article>
-    {% endfor %}
-  </section>
+        </article>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="empty-state" id="goals-empty">
+      <i data-lucide="target" aria-hidden="true" width="32" height="32" style="color: var(--ink-muted);"></i>
+      <h2 class="empty-state-title">No savings goals yet</h2>
+      <p class="empty-state-body">Create a savings target to keep track of what you are putting aside.</p>
+    </section>
+  {% endif %}
 
   <section class="card-tint" style="margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 24px;">
     {{ illustration("plant") }}

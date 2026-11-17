@@ -110,7 +110,7 @@
   </div>
 
   <!-- Table -->
-  <div class="expenses-table-wrap" id="expenses-table-wrap">
+  <div class="expenses-table-wrap" id="expenses-table-wrap" {% if count == 0 %}hidden{% endif %}>
     <table class="expenses-table">
       <thead>
         <tr>
@@ -157,9 +157,9 @@
     </table>
   </div>
 
-  <!-- Empty State (shown when search/filter matches nothing or all deleted) -->
-  <div id="expenses-empty-state" hidden style="margin-top: 16px;">
-    {{ EmptyState("No matching expenses", "Try clearing your search or category filter, or add a new expense.", action_label="Clear filters", action_id="clear-expense-filters", icon="search") }}
+  <!-- Empty State (shown when search/filter matches nothing or 0 entries) -->
+  <div id="expenses-empty-state" {% if count > 0 %}hidden{% endif %} style="margin-top: 16px;">
+    {{ EmptyState("No expenses yet" if count == 0 else "No matching expenses", "Add your first expense or clear your filters to get started.", action_label="Clear filters", action_id="clear-expense-filters", icon="search") }}
   </div>
 
   <!-- Add / Edit Expense Modal -->

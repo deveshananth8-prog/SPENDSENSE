@@ -493,53 +493,15 @@
     });
   }
 
-  /* Profile Avatar Preview & Auth Form Feedback */
+  /* Profile Avatar Auto-Submit */
   function initProfileAndAuth() {
     var fileInput = document.getElementById("avatar-file-input");
-    var preview = document.getElementById("profile-avatar-preview");
-    var removeBtn = document.getElementById("avatar-remove-btn");
+    var uploadForm = document.getElementById("avatar-upload-form");
 
-    if (fileInput && preview) {
+    if (fileInput && uploadForm) {
       fileInput.addEventListener("change", function () {
-        var file = fileInput.files && fileInput.files[0];
-        if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function (ev) {
-          preview.innerHTML = '<span class="avatar avatar-lg"><img src="' + ev.target.result + '" alt="Riya Sharma" /></span>';
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    if (removeBtn && preview) {
-      removeBtn.addEventListener("click", function () {
-        preview.innerHTML = '<span class="avatar avatar-lg" aria-label="Riya Sharma"><span>RS</span></span>';
-        if (fileInput) fileInput.value = "";
-      });
-    }
-
-    var signinForm = document.getElementById("signin-form");
-    if (signinForm) {
-      signinForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var fb = document.getElementById("signin-feedback");
-        var txt = document.getElementById("signin-feedback-text");
-        if (fb && txt) {
-          txt.textContent = "Sign in connects in Stage 2. Click 'Try the demo as Riya' below to explore the app now.";
-          fb.hidden = false;
-        }
-      });
-    }
-
-    var signupForm = document.getElementById("signup-form");
-    if (signupForm) {
-      signupForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var fb = document.getElementById("signup-feedback");
-        var txt = document.getElementById("signup-feedback-text");
-        if (fb && txt) {
-          txt.textContent = "Account creation connects in Stage 2. Click 'Try the demo first' below to explore the app now.";
-          fb.hidden = false;
+        if (fileInput.files && fileInput.files[0]) {
+          uploadForm.submit();
         }
       });
     }
@@ -550,11 +512,16 @@
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     document.querySelectorAll("[data-countup]").forEach(function (el) {
       var targetMinor = parseInt(el.getAttribute("data-countup") || "0", 10);
-      if (!targetMinor) return;
+      var finalText = el.textContent;
+      if (!targetMinor || targetMinor <= 0) return;
       var duration = 220;
       var start = performance.now();
       function step(now) {
         var t = Math.min((now - start) / duration, 1);
+        if (t >= 1) {
+          el.textContent = finalText;
+          return;
+        }
         var eased = 1 - Math.pow(1 - t, 3);
         var current = Math.round(targetMinor * (0.85 + 0.15 * eased));
         el.textContent = new Intl.NumberFormat("en-IN", {
@@ -562,7 +529,7 @@
           currency: "INR",
           minimumFractionDigits: 2,
         }).format(current / 100);
-        if (t < 1) requestAnimationFrame(step);
+        requestAnimationFrame(step);
       }
       requestAnimationFrame(step);
     });

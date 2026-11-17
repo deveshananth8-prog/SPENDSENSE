@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import Button, Input %}
+{% from "macros.html" import Input %}
 
 {% block title %}Sign in — SpendSense{% endblock %}
 
@@ -9,21 +9,31 @@
     <div style="margin-bottom: 20px;">
       <p class="meta-line" style="margin-bottom: 6px;">Welcome back</p>
       <h1 id="signin-title" style="font-size: 1.85rem;">Sign in to SpendSense</h1>
-      <p class="card-subtitle">Stage 1 UI preview — jump straight into Riya's sample profile or explore the form.</p>
+      <p class="card-subtitle">Enter your email and password, or launch a temporary demo account.</p>
     </div>
 
-    <div class="state-banner" id="signin-feedback" hidden style="margin-bottom: 16px;">
-      <span id="signin-feedback-text"></span>
-    </div>
+    {% if error_msg %}
+      <div class="state-banner state-banner-error" role="alert" style="margin-bottom: 16px;">
+        <span>{{ error_msg }}</span>
+      </div>
+    {% endif %}
 
-    <form id="signin-form" class="stack-md" novalidate>
-      {{ Input("email", "Email address", type="email", placeholder="riya@hostelmail.in", required=True) }}
+    <form id="signin-form" method="post" action="/signin" class="stack-md">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+      <input type="hidden" name="next" value="{{ next_url or '/home' }}" />
+      {{ Input("email", "Email address", value=email_value or "", type="email", placeholder="riya@hostelmail.in", required=True) }}
       {{ Input("password", "Password", type="password", placeholder="At least 8 characters", required=True) }}
       <button type="submit" class="btn btn-primary" style="width: 100%;">Sign in</button>
     </form>
 
     <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
-      {{ Button("Try the demo as Riya (INR)", variant="secondary", href="/home", icon="sparkles") }}
+      <form method="post" action="/demo" style="margin: 0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+        <button type="submit" class="btn btn-secondary" style="width: 100%;">
+          <i data-lucide="sparkles" aria-hidden="true" width="16" height="16"></i>
+          <span>Try the demo</span>
+        </button>
+      </form>
       <p style="font-size: 0.88rem; color: var(--ink-muted); text-align: center;">
         New here? <a href="/signup" style="color: var(--primary); font-weight: 600;">Create an account</a>
       </p>

@@ -36,24 +36,32 @@
   </section>
 
   <!-- Per-category Grid -->
-  <section class="budgets-grid" aria-label="Category budgets">
-    {% for b in budgets %}
-      <article class="card">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
-          <h2 style="font-size: 1.15rem;">{{ b.category }}</h2>
-          {{ Pill(b.status_label, tone=b.tone) }}
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
-          <span class="money" style="font-family: var(--font-display); font-size: 1.35rem; font-weight: 600;">{{ b.spent_formatted }}</span>
-          <span class="money" style="font-size: 0.86rem; color: var(--ink-muted);">of {{ b.limit_formatted }} ({{ b.raw_pct }}%)</span>
-        </div>
-        {{ ProgressBar(b.pct, tone=b.tone, label=b.category + " budget") }}
-        <div style="margin-top: 10px; font-size: 0.84rem; color: var(--ink-muted);">
-          <span class="money">{{ b.remaining_formatted }}</span> remaining this month
-        </div>
-      </article>
-    {% endfor %}
-  </section>
+  {% if budgets %}
+    <section class="budgets-grid" aria-label="Category budgets">
+      {% for b in budgets %}
+        <article class="card">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+            <h2 style="font-size: 1.15rem;">{{ b.category }}</h2>
+            {{ Pill(b.status_label, tone=b.tone) }}
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+            <span class="money" style="font-family: var(--font-display); font-size: 1.35rem; font-weight: 600;">{{ b.spent_formatted }}</span>
+            <span class="money" style="font-size: 0.86rem; color: var(--ink-muted);">of {{ b.limit_formatted }} ({{ b.raw_pct }}%)</span>
+          </div>
+          {{ ProgressBar(b.pct, tone=b.tone, label=b.category + " budget") }}
+          <div style="margin-top: 10px; font-size: 0.84rem; color: var(--ink-muted);">
+            <span class="money">{{ b.remaining_formatted }}</span> remaining this month
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="empty-state">
+      <i data-lucide="pie-chart" aria-hidden="true" width="32" height="32" style="color: var(--ink-muted);"></i>
+      <h2 class="empty-state-title">No budgets set yet</h2>
+      <p class="empty-state-body">Set monthly category caps in Stage 3, or try the demo account to preview Riya's hostel budgets.</p>
+    </section>
+  {% endif %}
 
   {% call Modal("edit-budget-modal", "Adjust category budget", "Stage 1 UI preview") %}
     <form class="stack-md" onsubmit="event.preventDefault(); document.getElementById('edit-budget-modal').hidden = true;">

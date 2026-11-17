@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import Avatar, Input, ThemeToggle, CurrencyPicker, Modal %}
+{% from "macros.html" import Avatar, Input, ThemeToggle, Modal %}
 
 {% block title %}Profile & Settings — SpendSense{% endblock %}
 
@@ -10,7 +10,7 @@
       <div class="meta-line">
         <span>Account & Preferences</span>
         <span aria-hidden="true">·</span>
-        <span>Sample profile</span>
+        <span>{{ "Demo account" if user.is_demo else "Personal account" }}</span>
       </div>
       <h1 class="page-title">Profile</h1>
     </div>
@@ -21,15 +21,36 @@
     <div class="stack-md">
       <section class="card">
         <h2 class="card-title" style="margin-bottom: 14px;">Profile picture</h2>
+
+        {% if avatar_error %}
+          <div class="state-banner state-banner-error" role="alert" style="margin-bottom: 12px;">
+            <span>{{ avatar_error }}</span>
+          </div>
+        {% elif avatar_success %}
+          <div class="state-banner" role="status" style="margin-bottom: 12px;">
+            <span>{{ avatar_success }}</span>
+          </div>
+        {% endif %}
+
         <div style="display: flex; align-items: center; gap: 18px;">
           <div id="profile-avatar-preview">
-            {{ Avatar(user.initials, user.display_name, "lg") }}
+            {{ Avatar(user.initials, user.display_name, "lg", user.avatar_url) }}
           </div>
           <div class="stack-sm">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <label for="avatar-file-input" class="btn btn-secondary btn-sm" style="cursor: pointer;">Upload photo</label>
-              <input type="file" id="avatar-file-input" accept="image/jpeg,image/png,image/webp" class="sr-only" />
-              <button type="button" class="btn btn-ghost btn-sm" id="avatar-remove-btn">Remove</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+              <form method="post" action="/profile/avatar" enctype="multipart/form-data" id="avatar-upload-form" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+                <label for="avatar-file-input" class="btn btn-secondary btn-sm" style="cursor: pointer;">
+                  {{ "Change photo" if user.avatar_url else "Upload photo" }}
+                </label>
+                <input type="file" id="avatar-file-input" name="avatar" accept="image/jpeg,image/png,image/webp" class="sr-only" />
+              </form>
+              {% if user.avatar_url %}
+                <form method="post" action="/profile/avatar/remove" style="margin: 0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+                  <button type="submit" class="btn btn-ghost btn-sm" id="avatar-remove-btn">Remove</button>
+                </form>
+              {% endif %}
             </div>
             <span style="font-size: 0.78rem; color: var(--ink-muted);">JPEG, PNG or WebP up to 2 MB. Falls back to initials.</span>
           </div>
@@ -38,67 +59,50 @@
 
       <section class="card">
         <h2 class="card-title" style="margin-bottom: 6px;">Appearance</h2>
-        <p class="card-subtitle" style="margin-bottom: 14px;">Choose Light, warm Dark, or follow your device.</p>
+        <p class="card-subtitle" style="margin-bottom: 14px;">Saved to your account across devices.</p>
         {{ ThemeToggle("profile-theme") }}
       </section>
 
       <section class="card">
         <h2 class="card-title" style="margin-bottom: 6px;">Session & Account</h2>
-        <p class="card-subtitle" style="margin-bottom: 16px;">Sign out or permanently delete your account.</p>
+        <p class="card-subtitle" style="margin-bottom: 16px;">Sign out or permanently delete your account and all data.</p>
         <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-          <a href="/" class="btn btn-secondary">Log out</a>
+          <form method="post" action="/logout" style="margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+            <button type="submit" class="btn btn-secondary">Log out</button>
+          </form>
           <button type="button" class="btn btn-danger" data-modal-open="delete-account-modal">Delete account</button>
         </div>
       </section>
     </div>
 
-    <!-- Right Column: Identity, Currency, Allowance, Password -->
+    <!-- Right Column: Identity, Read-only Currency, Allowance, Password -->
     <div class="stack-md">
       <section class="card">
-        <h2 class="card-title" style="margin-bottom: 16px;">Personal & Currency settings</h2>
-        <form id="profile-settings-form" class="stack-md" onsubmit="event.preventDefault(); document.getElementById('profile-saved-banner').hidden = false;">
+        <h2 class="card-title" style="margin-bottom: 16px;">Personal & Allowance settings</h2>
+
+        {% if info_error %}
+          <div class="state-banner state-banner-error" role="alert" style="margin-bottom: 14px;">
+            <span>{{ info_error }}</span>
+          </div>
+        {% elif info_success %}
+          <div class="state-banner" role="status" style="margin-bottom: 14px;">
+            <span>{{ info_success }}</span>
+          </div>
+        {% endif %}
+
+        <form id="profile-settings-form" method="post" action="/profile/info" class="stack-md">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            {{ Input("display_name", "Display name", value=user.display_name) }}
+            {{ Input("display_name", "Display name", value=user.display_name, required=True) }}
             {{ Input("email", "Email address", value=user.email, type="email", readonly=True, hint="Read-only account email.") }}
           </div>
 
-          <div class="field">
-            <span class="field-label">Working currency</span>
-            {{ CurrencyPicker(currencies, selected_code=user.currency, input_name="currency", id_prefix="profile-cp") }}
-            <span class="field-hint">
-              Approximate rates as of {{ rates_as_of }}. Switching shows conversion choices — never converted silently.
-            </span>
-          </div>
-
-          <!-- Currency Switch Preview Box (shown when user picks a different currency) -->
-          <div class="card-tint" id="currency-switch-preview" hidden>
-            <strong style="display: block; margin-bottom: 6px;">Switching currency to <span id="cp-new-code">USD</span></strong>
-            <p style="font-size: 0.85rem; color: var(--ink-muted); margin-bottom: 10px;">
-              Choose how to handle your existing ₹ amounts (approximate rate, for clarity only):
-            </p>
-            <div class="stack-sm" style="font-size: 0.88rem;">
-              <label style="display: flex; gap: 8px; align-items: center;">
-                <input type="radio" name="currency_mode" value="convert" checked />
-                <span>Convert existing amounts at approximate rate</span>
-              </label>
-              <label style="display: flex; gap: 8px; align-items: center;">
-                <input type="radio" name="currency_mode" value="keep" />
-                <span>Keep the numbers and just change the currency symbol</span>
-              </label>
-              <label style="display: flex; gap: 8px; align-items: center;">
-                <input type="radio" name="currency_mode" value="fresh" />
-                <span>Start fresh with a new scaled sample profile</span>
-              </label>
-            </div>
-          </div>
+          {{ Input("currency_display", "Working currency", value=currency_display, readonly=True, hint="Stored on your account. Currency switching arrives in a later stage.") }}
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            {{ Input("allowance", "Monthly allowance", value="6000", type="number", min="0", step="100", prefix="₹") }}
+            {{ Input("allowance", "Monthly allowance", value=(user.monthly_allowance_minor // 100) if user.currency != 'KWD' else user.monthly_allowance_minor, type="number", min="0", step="1") }}
             {{ Input("next_income", "Next income date", value=user.next_income_date, type="date") }}
-          </div>
-
-          <div class="state-banner" id="profile-saved-banner" hidden>
-            <span>Profile preferences preview updated (Stage 1 UI only).</span>
           </div>
 
           <div style="display: flex; justify-content: flex-end;">
@@ -109,14 +113,23 @@
 
       <section class="card">
         <h2 class="card-title" style="margin-bottom: 16px;">Change password</h2>
-        <form class="stack-md" onsubmit="event.preventDefault(); document.getElementById('pw-saved-banner').hidden = false;">
-          {{ Input("current_password", "Current password", type="password", placeholder="••••••••") }}
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            {{ Input("new_password", "New password", type="password", placeholder="Min 8 characters") }}
-            {{ Input("confirm_new_password", "Confirm new password", type="password", placeholder="Repeat password") }}
+
+        {% if pw_error %}
+          <div class="state-banner state-banner-error" role="alert" style="margin-bottom: 14px;">
+            <span>{{ pw_error }}</span>
           </div>
-          <div class="state-banner" id="pw-saved-banner" hidden>
-            <span>Password change UI verified (no backend auth in Stage 1).</span>
+        {% elif pw_success %}
+          <div class="state-banner" role="status" style="margin-bottom: 14px;">
+            <span>{{ pw_success }}</span>
+          </div>
+        {% endif %}
+
+        <form method="post" action="/profile/password" class="stack-md">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+          {{ Input("current_password", "Current password", type="password", placeholder="Enter current password", required=True) }}
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            {{ Input("new_password", "New password", type="password", placeholder="Min 8 characters", required=True) }}
+            {{ Input("confirm_new_password", "Confirm new password", type="password", placeholder="Repeat password", required=True) }}
           </div>
           <div style="display: flex; justify-content: flex-end;">
             <button type="submit" class="btn btn-secondary">Update password</button>
@@ -126,14 +139,16 @@
     </div>
   </div>
 
-  {% call Modal("delete-account-modal", "Delete your account?", "This will permanently remove your transactions, budgets, and goals in the live app.") %}
+  {% call Modal("delete-account-modal", "Delete your account?", "This will permanently delete your profile, transactions, budgets, goals, and uploaded picture.") %}
     <p style="font-size: 0.92rem; color: var(--ink-muted); margin-bottom: 18px;">
-      In Stage 1 this is a UI confirmation preview. Once database persistence is added, deleting your account cannot be undone.
+      This action cannot be undone. All data associated with <strong>{{ user.email }}</strong> will be removed immediately.
     </p>
-    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+    <form method="post" action="/profile/delete" style="display: flex; justify-content: flex-end; gap: 10px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+      <input type="hidden" name="confirm_delete" value="yes" />
       <button type="button" class="btn btn-secondary" data-modal-close="delete-account-modal">Keep account</button>
-      <a href="/" class="btn btn-danger">Confirm delete</a>
-    </div>
+      <button type="submit" class="btn btn-danger">Confirm delete</button>
+    </form>
   {% endcall %}
 </div>
 {% endblock %}

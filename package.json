@@ -4,12 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 3000",
-    "build": ".venv/bin/python -m compileall -q app data tests",
-    "preview": ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 3000",
-    "start": ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 3000",
+    "dev": "node scripts/start_server.mjs",
+    "build": "python3 -m compileall -q app data tests",
+    "preview": "node scripts/start_server.mjs",
+    "start": "node scripts/start_server.mjs",
     "clean": "rm -rf dist server.js __pycache__ app/__pycache__",
-    "lint": ".venv/bin/python -m compileall -q app data tests"
+    "lint": "python3 -m compileall -q app data tests"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

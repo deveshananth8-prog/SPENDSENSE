@@ -1,4 +1,4 @@
-"""Stage 1 unit and route smoke tests for SpendSense AI."""
+"""Stage 1 pure logic & route smoke tests (updated for Stage 2 auth protection)."""
 
 from fastapi.testclient import TestClient
 
@@ -27,7 +27,6 @@ def test_currency_catalog_contains_major_currencies():
 
 
 def test_before_you_spend_verdicts_and_edge_cases():
-    # Comfortable
     res_ok = compute_before_you_spend(
         balance_minor=248000,
         essentials_minor=85000,
@@ -39,7 +38,6 @@ def test_before_you_spend_verdicts_and_edge_cases():
     assert res_ok["safe_to_spend_minor"] == 163000
     assert res_ok["left_after_buying_minor"] == 143000
 
-    # Tight (daily_after < 10000)
     res_tight = compute_before_you_spend(
         balance_minor=248000,
         essentials_minor=85000,
@@ -50,7 +48,6 @@ def test_before_you_spend_verdicts_and_edge_cases():
     assert res_tight["verdict"] == "Tight"
     assert res_tight["left_after_buying_minor"] == 43100
 
-    # Not now (essentials > balance or left_after < 0)
     res_no = compute_before_you_spend(
         balance_minor=50000,
         essentials_minor=85000,
@@ -74,21 +71,13 @@ def test_runway_calculation_riya_safe():
     assert runway["runway_days"] >= 12
 
 
-def test_all_stage1_routes_render_cleanly():
-    routes = [
+def test_public_routes_render_cleanly():
+    for path, expected_text in [
         ("/", "Know if you can afford it before you pay."),
         ("/signin", "Sign in to SpendSense"),
         ("/signup", "Create your account"),
-        ("/home", "Money Runway"),
-        ("/before-you-spend", "How we calculated this"),
-        ("/money-buddy", "Why this answer?"),
-        ("/expenses", "Quick Add"),
-        ("/budgets", "Monthly Budgets"),
-        ("/goals", "Your Goals"),
-        ("/profile", "Profile picture"),
-    ]
-    for path, expected_text in routes:
+    ]:
         resp = client.get(path)
-        assert resp.status_code == 200, f"Failed on {path}"
+        assert resp.status_code == 200
         assert expected_text in resp.text
         assert "SpendSense gives general guidance, not professional financial advice." in resp.text

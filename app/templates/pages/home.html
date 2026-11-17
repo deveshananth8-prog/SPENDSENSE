@@ -10,7 +10,7 @@
       <div class="meta-line">
         <span>November 2026</span>
         <span aria-hidden="true">·</span>
-        <span>Sample data · Riya Sharma</span>
+        <span>{{ "Demo account" if user.is_demo else user.display_name }}</span>
       </div>
       <h1 class="page-title">Good morning, {{ user.display_name.split(' ')[0] }}</h1>
     </div>
@@ -27,8 +27,8 @@
   <section class="home-kpis" aria-label="Monthly overview">
     <article class="kpi-card kpi-card-featured">
       <div class="kpi-label">Current balance</div>
-      <div class="kpi-value money" data-countup="{{ user.current_balance_minor }}">{{ kpis.balance }}</div>
-      <div class="kpi-note">Includes {{ user.upcoming_essentials_formatted }} reserved for essentials</div>
+      <div class="kpi-value money" data-countup="{{ kpis.balance_minor }}">{{ kpis.balance }}</div>
+      <div class="kpi-note">Includes {{ kpis.essentials_formatted }} reserved for essentials</div>
     </article>
     <article class="kpi-card">
       <div class="kpi-label">Monthly allowance</div>
@@ -38,12 +38,12 @@
     <article class="kpi-card">
       <div class="kpi-label">Spent this month</div>
       <div class="kpi-value money">{{ kpis.expenses }}</div>
-      <div class="kpi-note">Across 12 transactions</div>
+      <div class="kpi-note">Across {{ kpis.tx_count }} transactions</div>
     </article>
     <article class="kpi-card">
       <div class="kpi-label">Saved in goals</div>
       <div class="kpi-value money">{{ kpis.savings }}</div>
-      <div class="kpi-note">3 active goals</div>
+      <div class="kpi-note">{{ kpis.goal_count }} active goals</div>
     </article>
   </section>
 
@@ -53,7 +53,7 @@
       <div class="card-header">
         <div>
           <h2 class="card-title">Where your money went</h2>
-          <p class="card-subtitle">November spending by category</p>
+          <p class="card-subtitle">Spending by category</p>
         </div>
         <a href="/budgets" class="nav-link" style="padding: 4px 0; font-size: 0.85rem;">View budgets →</a>
       </div>
@@ -66,27 +66,33 @@
       <div class="card-header">
         <div>
           <h2 class="card-title">Recent transactions</h2>
-          <p class="card-subtitle">Latest 5 hostel & UPI entries</p>
+          <p class="card-subtitle">Latest entries</p>
         </div>
         <a href="/expenses" class="nav-link" style="padding: 4px 0; font-size: 0.85rem;">All expenses →</a>
       </div>
-      <div class="tx-list">
-        {% for tx in recent_transactions %}
-          <div class="tx-row">
-            <div>
-              <div class="tx-title">{{ tx.merchant }}</div>
-              <div class="meta-line">
-                <span>{{ tx.category }}</span>
-                <span aria-hidden="true">·</span>
-                <span>{{ tx.date }}</span>
-                <span aria-hidden="true">·</span>
-                <span>{{ tx.method }}</span>
+      {% if recent_transactions %}
+        <div class="tx-list">
+          {% for tx in recent_transactions %}
+            <div class="tx-row">
+              <div>
+                <div class="tx-title">{{ tx.merchant }}</div>
+                <div class="meta-line">
+                  <span>{{ tx.category }}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{{ tx.date }}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{{ tx.method }}</span>
+                </div>
               </div>
+              <div class="tx-amount money">{{ tx.amount_formatted }}</div>
             </div>
-            <div class="tx-amount money">{{ tx.amount_formatted }}</div>
-          </div>
-        {% endfor %}
-      </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="color: var(--ink-muted); font-size: 0.92rem; padding: 16px 0;">
+          No transactions recorded yet. Head to <a href="/expenses" style="color: var(--primary); font-weight: 600;">Expenses</a> to log your first spend.
+        </p>
+      {% endif %}
     </article>
   </section>
 

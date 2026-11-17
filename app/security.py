@@ -28,6 +28,13 @@ _hasher = PasswordHasher()
 limiter = Limiter(key_func=get_remote_address)
 
 
+def ai_user_rate_key(request: Request) -> str:
+    uid = verify_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+    if uid is not None:
+        return f"user:{uid}"
+    return f"ip:{get_remote_address(request)}"
+
+
 def hash_password(password: str) -> str:
     return _hasher.hash(password)
 
@@ -239,3 +246,12 @@ def require_user(
             path = f"{path}?{request.url.query}"
         raise AuthRequiredRedirect(next_url=quote(path, safe="/?=&"))
     return user
+
+
+def require_api_user(
+    user: User | None = Depends(get_optional_user),
+) -> User:
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return user
+

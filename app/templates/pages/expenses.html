@@ -4,11 +4,11 @@
 {% block title %}Expenses — SpendSense{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container" id="expenses-page-root" data-user-currency="{{ user.currency }}" data-user-locale="{{ user.locale }}">
   <div class="page-head">
     <div>
       <div class="meta-line">
-        <span>November 2026</span>
+        <span>Tracked entries</span>
         <span aria-hidden="true">·</span>
         <span>Total: <strong class="money" id="expenses-total-label">{{ total_formatted }}</strong></span>
         <span aria-hidden="true">·</span>
@@ -24,40 +24,80 @@
     </div>
   </div>
 
-  <!-- Quick Add Box (SMS paste or natural text like "chai 20") -->
+  <!-- Quick Add Box (SMS paste, natural text like "chai 20", or payment screenshot) -->
   <section class="quick-add-card" aria-labelledby="quick-add-heading">
     <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px;">
       <div>
-        <h2 id="quick-add-heading" style="font-size: 1.1rem;">Quick Add</h2>
-        <p style="font-size: 0.86rem; color: var(--ink-muted);">Type something like <code>chai 20</code> or paste an Indian bank/UPI SMS alert.</p>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <h2 id="quick-add-heading" style="font-size: 1.1rem;">Quick Add</h2>
+          <span class="offline-badge" id="qa-offline-badge" {% if not offline_mode %}hidden{% endif %}>Offline mode</span>
+        </div>
+        <p style="font-size: 0.86rem; color: var(--ink-muted);">Type <code>chai 20</code> or <code>auto 80 yesterday</code>, paste a bank/UPI SMS, or scan a payment screenshot.</p>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm" id="fill-sms-sample-btn">Try sample UPI SMS</button>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-ghost btn-sm" id="fill-sms-sample-btn">Try sample UPI SMS</button>
+      </div>
     </div>
+
     <form id="quick-add-form" class="quick-add-row">
       <label class="sr-only" for="quick-add-input">Quick add text or SMS</label>
       <input
         type="text"
         id="quick-add-input"
         class="input"
-        placeholder='e.g. "chai 20" or "Rs 245.00 debited via UPI to Zomato on 16-Nov"'
+        maxlength="1000"
+        placeholder='e.g. "chai 20", "auto 80 yesterday", or "Rs 245.00 debited via UPI to Zomato"'
       />
-      <button type="submit" class="btn btn-primary">Parse & preview</button>
+      <button type="submit" class="btn btn-primary" id="qa-parse-btn">Parse & preview</button>
     </form>
+
+    <div class="quick-add-upload-wrap">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <input type="file" id="qa-screenshot-input" accept="image/jpeg,image/png,image/webp" hidden />
+        <button type="button" class="btn btn-secondary btn-sm" id="qa-screenshot-btn">
+          <i data-lucide="image" aria-hidden="true" width="15" height="15"></i>
+          <span>Scan payment screenshot</span>
+        </button>
+        <span style="font-size: 0.8rem; color: var(--ink-muted);" id="qa-screenshot-hint">JPEG, PNG, or WebP up to 4 MB</span>
+      </div>
+    </div>
+
+    <div id="qa-loading" hidden class="stack-sm" style="margin-top: 12px;" aria-label="Parsing transaction">
+      <div class="skeleton-row" style="height: 36px;"></div>
+      <div class="skeleton-row" style="height: 52px;"></div>
+    </div>
+
+    <div class="state-banner state-banner-error" id="qa-error" hidden style="margin-top: 12px;">
+      <span id="qa-error-text">Could not extract a transaction from that input.</span>
+      <button type="button" class="btn btn-secondary btn-sm" id="qa-error-dismiss">Dismiss</button>
+    </div>
+
+    <div class="state-banner" id="qa-saved-banner" hidden style="margin-top: 12px;">
+      <span id="qa-saved-text">Saved to Expenses.</span>
+    </div>
 
     <!-- Editable confirmation preview -->
     <div id="quick-add-preview" class="card" hidden style="margin-top: 14px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
-        <strong>Review before adding</strong>
-        <span style="font-size: 0.8rem; color: var(--ink-muted);">Parsed locally (Stage 1 UI preview)</span>
+      <div class="ai-status-row" style="margin-bottom: 10px;">
+        <strong>Review & edit before saving</strong>
+        <span class="offline-badge" id="qa-preview-offline" hidden>Offline mode</span>
       </div>
-      <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 10px; align-items: end;">
+      <div class="quick-add-preview-grid">
         <div class="field">
           <label class="field-label" for="qa-merchant">Merchant / Note</label>
-          <input type="text" id="qa-merchant" class="input" />
+          <input type="text" id="qa-merchant" class="input" maxlength="120" />
         </div>
         <div class="field">
-          <label class="field-label" for="qa-amount">Amount (₹)</label>
-          <input type="number" id="qa-amount" class="input num" min="1" step="1" />
+          <label class="field-label" for="qa-amount">Amount</label>
+          <input type="number" id="qa-amount" class="input num" min="0.01" step="0.01" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="qa-currency">Currency</label>
+          <select id="qa-currency" class="select">
+            {% for c in currencies %}
+              <option value="{{ c.code }}" {{ 'selected' if c.code == user.currency else '' }}>{{ c.code }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="field">
           <label class="field-label" for="qa-category">Category</label>
@@ -67,10 +107,32 @@
             {% endfor %}
           </select>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-primary" id="qa-confirm-btn">Add</button>
-          <button type="button" class="btn btn-ghost" id="qa-cancel-btn">Cancel</button>
+        <div class="field">
+          <label class="field-label" for="qa-date">Date</label>
+          <input type="date" id="qa-date" class="input" value="{{ today_iso }}" />
         </div>
+        <div class="field">
+          <label class="field-label" for="qa-type">Type</label>
+          <select id="qa-type" class="select">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="currency-mismatch-box" id="qa-currency-mismatch-box" hidden>
+        <div>
+          Detected currency (<strong id="qa-mismatch-detected"></strong>) differs from your account currency (<strong>{{ user.currency }}</strong>). Please confirm before saving.
+        </div>
+        <label class="currency-mismatch-check">
+          <input type="checkbox" id="qa-currency-confirm" />
+          <span>Yes, save this transaction in <span id="qa-mismatch-confirm-code"></span></span>
+        </label>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
+        <button type="button" class="btn btn-ghost" id="qa-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="qa-confirm-btn">Add</button>
       </div>
     </div>
   </section>
@@ -96,13 +158,13 @@
     </div>
   </div>
 
-  <!-- Error State Demo Container -->
+  <!-- Error State Container -->
   <div class="state-banner state-banner-error" id="expenses-error-state" hidden style="margin-bottom: 16px;">
     <span>Could not refresh expenses right now. Check your connection and try again.</span>
     <button type="button" class="btn btn-secondary btn-sm" id="dismiss-error-demo">Retry</button>
   </div>
 
-  <!-- Loading State Demo Container -->
+  <!-- Loading State Container -->
   <div id="expenses-loading-state" hidden class="stack-sm" style="margin-bottom: 16px;" aria-label="Loading expenses">
     <div class="skeleton-row"></div>
     <div class="skeleton-row"></div>
@@ -132,6 +194,8 @@
             data-category="{{ exp.category }}"
             data-date="{{ exp.date }}"
             data-amount-minor="{{ exp.amount_minor }}"
+            data-currency="{{ exp.currency }}"
+            data-type="{{ exp.type }}"
           >
             <td class="num" style="white-space: nowrap;">{{ exp.date }}</td>
             <td>
@@ -162,14 +226,14 @@
     {{ EmptyState("No expenses yet" if count == 0 else "No matching expenses", "Add your first expense or clear your filters to get started.", action_label="Clear filters", action_id="clear-expense-filters", icon="search") }}
   </div>
 
-  <!-- Add / Edit Expense Modal -->
-  {% call Modal("add-expense-modal", "Add or edit expense", "Stage 1 UI preview — updates this list in memory") %}
+  <!-- Add / Edit Expense Modal (includes live AI category suggestion while typing) -->
+  {% call Modal("add-expense-modal", "Add or edit expense", "Suggested categories update automatically as you type") %}
     <form id="expense-modal-form" class="stack-md">
       <input type="hidden" id="modal-exp-id" value="" />
-      {{ Input("merchant", "Merchant or title", placeholder="e.g. Campus Mess, Metro Card", required=True, id="modal-exp-merchant") }}
+      {{ Input("merchant", "Merchant or title", placeholder="e.g. Campus Mess, Metro Card, Starbucks", required=True, id="modal-exp-merchant") }}
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-        {{ Input("amount", "Amount", type="number", min="1", step="1", prefix="₹", required=True, id="modal-exp-amount") }}
-        {{ Input("date", "Date", type="date", value="2026-11-17", required=True, id="modal-exp-date") }}
+        {{ Input("amount", "Amount", type="number", min="0.01", step="0.01", prefix=currency_symbol, required=True, id="modal-exp-amount") }}
+        {{ Input("date", "Date", type="date", value=today_iso, required=True, id="modal-exp-date") }}
       </div>
       <div class="field">
         <label class="field-label" for="modal-exp-category">Category</label>
@@ -178,6 +242,10 @@
             <option value="{{ cat }}">{{ cat }}</option>
           {% endfor %}
         </select>
+        <div class="ai-suggest-hint" id="modal-cat-suggestion" hidden>
+          <span id="modal-cat-suggestion-text"></span>
+          <span class="offline-badge" id="modal-cat-offline" hidden>Offline mode</span>
+        </div>
       </div>
       {{ Input("note", "Note (optional)", placeholder="What was this for?", id="modal-exp-note") }}
       <div style="display: flex; justify-content: flex-end; gap: 10px;">

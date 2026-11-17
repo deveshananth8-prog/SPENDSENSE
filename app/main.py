@@ -4,14 +4,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
 from app.db import SessionLocal, init_db
-from app.routers import auth, pages, profile
+from app.routers import ai, auth, pages, profile
 from app.security import (
     AuthRequiredRedirect,
     CSRF_COOKIE_NAME,
@@ -54,6 +54,11 @@ async def auth_redirect_handler(_request: Request, exc: AuthRequiredRedirect):
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, _exc: RateLimitExceeded):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many AI requests. Please wait a minute and try again."},
+        )
     return RedirectResponse(url=f"{request.url.path}?rate_limited=1", status_code=429)
 
 
@@ -61,8 +66,9 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 app.include_router(pages.router)
 app.include_router(auth.router)
 app.include_router(profile.router)
+app.include_router(ai.router)
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "stage": 2}
+    return {"status": "ok", "stage": 4}

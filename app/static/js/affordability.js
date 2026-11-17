@@ -1,5 +1,13 @@
 /* SpendSense Before You Spend Live Calculator (Integer minor-unit math, zero floats for money) */
 (function () {
+  var lastExplainPayload = null;
+  var explainTimer = null;
+
+  function getCsrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute("content") || "" : "";
+  }
+
   function toMinor(majorStr, precision) {
     var cleaned = String(majorStr || "0").trim();
     if (!cleaned || isNaN(Number(cleaned))) return 0;
@@ -92,6 +100,52 @@
     };
   }
 
+  async function requestAiExplanation() {
+    var card = document.getElementById("bys-ai-card");
+    if (!card || !lastExplainPayload) return;
+
+    var loadingEl = document.getElementById("bys-ai-loading");
+    var errorEl = document.getElementById("bys-ai-error");
+    var textEl = document.getElementById("bys-ai-text");
+    var badgeEl = document.getElementById("bys-offline-badge");
+
+    if (errorEl) errorEl.hidden = true;
+    if (loadingEl) loadingEl.hidden = false;
+
+    try {
+      var resp = await fetch("/api/ai/explain-affordability", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": getCsrfToken(),
+        },
+        body: JSON.stringify(lastExplainPayload),
+      });
+      var data = {};
+      try { data = await resp.json(); } catch (err) {}
+      if (loadingEl) loadingEl.hidden = true;
+      if (!resp.ok) {
+        if (errorEl) errorEl.hidden = false;
+        return;
+      }
+      if (textEl && data.explanation) {
+        textEl.textContent = data.explanation;
+      }
+      if (badgeEl) {
+        badgeEl.hidden = !data.offline_mode;
+      }
+    } catch (err) {
+      if (loadingEl) loadingEl.hidden = true;
+      if (errorEl) errorEl.hidden = false;
+    }
+  }
+
+  function scheduleAiExplanation(delayMs) {
+    if (!document.getElementById("bys-ai-card")) return;
+    if (explainTimer) clearTimeout(explainTimer);
+    explainTimer = setTimeout(requestAiExplanation, delayMs);
+  }
+
   function updateSimulator(prefix) {
     var balanceEl = document.getElementById(prefix + "-balance");
     var essentialsEl = document.getElementById(prefix + "-essentials");
@@ -132,28 +186,38 @@
     if (pillText) pillText.textContent = res.verdict;
     if (summary) summary.textContent = res.summary;
 
+    var safeFormatted = formatMinor(res.safeToSpend, code, locale, precision);
+    var leftFormatted = formatMinor(res.leftAfter, code, locale, precision);
+    var dailyAfterFormatted = formatMinor(res.dailyAfter, code, locale, precision);
+    var dailyBeforeFormatted = formatMinor(res.dailyBefore, code, locale, precision);
+    var balanceFormatted = formatMinor(balanceMinor, code, locale, precision);
+    var essentialsFormatted = formatMinor(essentialsMinor, code, locale, precision);
+    var purchaseFormatted = formatMinor(purchaseMinor, code, locale, precision);
+    var thresholdFormatted = formatMinor(thresholdMinor, code, locale, precision);
+
     var safeEl = document.getElementById(prefix + "-safe-val");
     var leftEl = document.getElementById(prefix + "-left-val");
     var dailyEl = document.getElementById(prefix + "-daily-val");
-    if (safeEl) safeEl.textContent = formatMinor(res.safeToSpend, code, locale, precision);
-    if (leftEl) leftEl.textContent = formatMinor(res.leftAfter, code, locale, precision);
-    if (dailyEl) dailyEl.textContent = formatMinor(res.dailyAfter, code, locale, precision) + "/day";
+    if (safeEl) safeEl.textContent = safeFormatted;
+    if (leftEl) leftEl.textContent = leftFormatted;
+    if (dailyEl) dailyEl.textContent = dailyAfterFormatted + "/day";
 
     if (prefix === "mini") {
       var threshLabel = document.getElementById("mini-threshold-label");
-      if (threshLabel) threshLabel.textContent = formatMinor(thresholdMinor, code, locale, precision);
+      if (threshLabel) threshLabel.textContent = thresholdFormatted;
     }
 
     if (prefix === "full") {
       var itemInput = document.getElementById("full-item");
+      var itemName = (itemInput && itemInput.value.trim()) || "this purchase";
       var itemPreview = document.getElementById("full-item-preview");
-      if (itemInput && itemPreview) itemPreview.textContent = itemInput.value.trim() || "this purchase";
+      if (itemPreview) itemPreview.textContent = itemName;
 
       var barBeforeVal = document.getElementById("full-bar-before-val");
       var barAfterVal = document.getElementById("full-bar-after-val");
       var barAfter = document.getElementById("full-bar-after");
-      if (barBeforeVal) barBeforeVal.textContent = formatMinor(res.dailyBefore, code, locale, precision) + "/day";
-      if (barAfterVal) barAfterVal.textContent = formatMinor(res.dailyAfter, code, locale, precision) + "/day";
+      if (barBeforeVal) barBeforeVal.textContent = dailyBeforeFormatted + "/day";
+      if (barAfterVal) barAfterVal.textContent = dailyAfterFormatted + "/day";
       if (barAfter) {
         var pct = res.dailyBefore > 0 ? Math.max(Math.min(Math.round((res.dailyAfter / res.dailyBefore) * 100), 100), 4) : 0;
         barAfter.style.width = (res.leftAfter < 0 ? 0 : pct) + "%";
@@ -164,24 +228,10 @@
       var calcLeft = document.getElementById("calc-left");
       var calcDaily = document.getElementById("calc-daily");
       var calcFloor = document.getElementById("calc-floor");
-      if (calcSafe) {
-        calcSafe.textContent =
-          formatMinor(balanceMinor, code, locale, precision) +
-          " − " +
-          formatMinor(essentialsMinor, code, locale, precision) +
-          " = " +
-          formatMinor(res.safeToSpend, code, locale, precision);
-      }
-      if (calcLeft) {
-        calcLeft.textContent =
-          formatMinor(res.safeToSpend, code, locale, precision) +
-          " − " +
-          formatMinor(purchaseMinor, code, locale, precision) +
-          " = " +
-          formatMinor(res.leftAfter, code, locale, precision);
-      }
-      if (calcDaily) calcDaily.textContent = formatMinor(res.dailyAfter, code, locale, precision) + "/day (" + days + "d)";
-      if (calcFloor) calcFloor.textContent = formatMinor(thresholdMinor, code, locale, precision) + "/day";
+      if (calcSafe) calcSafe.textContent = balanceFormatted + " − " + essentialsFormatted + " = " + safeFormatted;
+      if (calcLeft) calcLeft.textContent = safeFormatted + " − " + purchaseFormatted + " = " + leftFormatted;
+      if (calcDaily) calcDaily.textContent = dailyAfterFormatted + "/day (" + days + "d)";
+      if (calcFloor) calcFloor.textContent = thresholdFormatted + "/day";
 
       var waitTitle = document.getElementById("alt-wait-title");
       var cheaperVal = document.getElementById("alt-cheaper-val");
@@ -198,6 +248,20 @@
       if (cheaperVal) cheaperVal.textContent = formatMinor(res.cheaperMax, code, locale, precision);
       if (splitPart) splitPart.textContent = formatMinor(res.firstPay, code, locale, precision);
       if (splitDaily) splitDaily.textContent = formatMinor(res.dailyFirst, code, locale, precision) + "/day";
+
+      lastExplainPayload = {
+        item: itemName.slice(0, 120),
+        verdict: res.verdict,
+        balance_formatted: balanceFormatted,
+        essentials_formatted: essentialsFormatted,
+        purchase_formatted: purchaseFormatted,
+        safe_to_spend_formatted: safeFormatted,
+        left_after_buying_formatted: leftFormatted,
+        daily_before_formatted: dailyBeforeFormatted,
+        daily_after_formatted: dailyAfterFormatted,
+        tight_threshold_formatted: thresholdFormatted,
+        days: days,
+      };
     }
   }
 
@@ -234,15 +298,23 @@
       if (!form) return;
       form.addEventListener("input", function () {
         updateSimulator(prefix);
+        if (prefix === "full") scheduleAiExplanation(550);
       });
       var currencyEl = document.getElementById(prefix + "-currency");
       if (currencyEl) {
         currencyEl.addEventListener("change", function () {
           scaleDefaultsForCurrency(prefix);
+          if (prefix === "full") scheduleAiExplanation(300);
         });
       }
       updateSimulator(prefix);
     });
+
+    var explainBtn = document.getElementById("bys-explain-btn");
+    if (explainBtn) {
+      explainBtn.addEventListener("click", requestAiExplanation);
+      requestAiExplanation();
+    }
 
     var saveGoalBtn = document.getElementById("save-as-goal-btn");
     var goalBanner = document.getElementById("goal-saved-banner");
@@ -250,7 +322,7 @@
     if (saveGoalBtn && goalBanner) {
       saveGoalBtn.addEventListener("click", function () {
         var item = (document.getElementById("full-item") || {}).value || "This purchase";
-        if (goalText) goalText.textContent = '"' + item + '" saved to your Stage 1 goal preview.';
+        if (goalText) goalText.textContent = '"' + item + '" saved to your goal preview.';
         goalBanner.hidden = false;
       });
     }

@@ -11,7 +11,8 @@
       <div class="meta-line">
         <span>Personal Money Notebook</span>
         <span aria-hidden="true">·</span>
-        <span>Stage 1 sample preview</span>
+        <span>Grounded in your {{ user.currency }} snapshot</span>
+        <span class="offline-badge" id="buddy-offline-badge" {% if not offline_mode %}hidden{% endif %}>Offline mode</span>
       </div>
       <h1 class="page-title">Money Buddy</h1>
       <p class="page-lead">Ask a plain question about your month. Every note cites the exact numbers behind it.</p>
@@ -46,10 +47,10 @@
         <h2 class="card-title" style="font-size: 1.08rem; margin-bottom: 8px;">Write a question in your notebook</h2>
         <form id="buddy-ask-form" class="stack-sm">
           <label class="sr-only" for="buddy-input">Your question</label>
-          <textarea id="buddy-input" class="textarea" rows="3" placeholder="e.g. Can I afford a weekend trip, or why did food go up?"></textarea>
+          <textarea id="buddy-input" class="textarea" rows="3" maxlength="500" placeholder="e.g. Can I afford a weekend trip, or why did food go up?"></textarea>
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-            <span style="font-size: 0.78rem; color: var(--ink-muted);">Stage 1 uses sample snapshot notes</span>
-            <button type="submit" class="btn btn-primary btn-sm">Add note</button>
+            <span style="font-size: 0.78rem; color: var(--ink-muted);">Uses only your live snapshot numbers</span>
+            <button type="submit" class="btn btn-primary btn-sm" id="buddy-submit-btn">Add note</button>
           </div>
         </form>
       </section>
@@ -64,18 +65,30 @@
 
     <!-- Right Column: Ruled Editorial Notebook -->
     <section class="notebook-paper" aria-label="Money Buddy notebook entries" id="buddy-notebook" aria-live="polite">
+      <div class="state-banner state-banner-error" id="buddy-error" hidden style="margin-bottom: 14px;">
+        <span id="buddy-error-text">Could not reach Money Buddy right now. Please try again.</span>
+        <button type="button" class="btn btn-secondary btn-sm" id="buddy-error-dismiss">Dismiss</button>
+      </div>
+
+      <div id="buddy-loading" hidden class="stack-sm" style="margin-bottom: 14px;" aria-label="Thinking through your snapshot">
+        <div class="skeleton-row" style="height: 24px; width: 65%;"></div>
+        <div class="skeleton-row" style="height: 60px;"></div>
+        <div class="skeleton-row" style="height: 36px; width: 85%;"></div>
+      </div>
+
       <article class="notebook-entry" id="buddy-active-entry">
         <div class="meta-line" style="margin-bottom: 6px;">
           <span>Notebook entry</span>
           <span aria-hidden="true">·</span>
-          <span>Snapshot: November 2026</span>
+          <span>Currency: {{ user.currency }}</span>
+          <span class="offline-badge" id="buddy-entry-offline" {% if not offline_mode %}hidden{% endif %}>Offline mode</span>
         </div>
         <h2 class="notebook-q" id="buddy-q">{{ initial_entry.label }}</h2>
         <p class="notebook-a" id="buddy-a">{{ initial_entry.answer }}</p>
         <div class="notebook-next">
           <strong>Next step:</strong> <span id="buddy-next">{{ initial_entry.next_step }}</span>
         </div>
-        <details class="why-details" open>
+        <details class="why-details" id="buddy-why-details" open>
           <summary>Why this answer?</summary>
           <ul class="why-list" id="buddy-why-list">
             {% for line in initial_entry.why %}

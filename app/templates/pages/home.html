@@ -8,7 +8,7 @@
   <div class="page-head">
     <div>
       <div class="meta-line">
-        <span>November 2026</span>
+        <span>This cycle</span>
         <span aria-hidden="true">·</span>
         <span>{{ "Demo account" if user.is_demo else user.display_name }}</span>
       </div>
@@ -27,7 +27,7 @@
   <section class="home-kpis" aria-label="Monthly overview">
     <article class="kpi-card kpi-card-featured">
       <div class="kpi-label">Current balance</div>
-      <div class="kpi-value money" data-countup="{{ kpis.balance_minor }}">{{ kpis.balance }}</div>
+      <div class="kpi-value money" data-countup="{{ kpis.balance_minor }}" data-currency="{{ user.currency }}" data-locale="{{ user.locale }}">{{ kpis.balance }}</div>
       <div class="kpi-note">Includes {{ kpis.essentials_formatted }} reserved for essentials</div>
     </article>
     <article class="kpi-card">
@@ -98,27 +98,41 @@
 
   <!-- 4. Monthly Summary Paragraph + 2 Insight Cards -->
   <section class="home-bottom-split">
-    <article class="card-tint">
+    <article class="card-tint" id="home-summary-card">
       <div class="card-header">
         <div>
           <h2 class="card-title">Monthly summary</h2>
           <p class="card-subtitle">Plain-language check-in</p>
         </div>
+        <span class="offline-badge" id="home-ai-badge" {% if not offline_mode %}hidden{% endif %}>Offline mode</span>
       </div>
-      <p class="summary-prose">{{ monthly_summary }}</p>
+      <div id="home-summary-skeleton" hidden class="stack-sm" style="margin-bottom: 10px;" aria-label="Refreshing summary">
+        <div class="skeleton-row" style="height: 22px;"></div>
+        <div class="skeleton-row" style="height: 22px; width: 82%;"></div>
+      </div>
+      <div class="state-banner state-banner-error" id="home-ai-error" hidden style="margin-bottom: 10px;">
+        <span>Showing grounded offline summary (AI refresh unavailable).</span>
+      </div>
+      <p class="summary-prose" id="home-monthly-summary">{{ monthly_summary }}</p>
       <div style="margin-top: 16px;">
         <a href="/money-buddy" class="btn btn-secondary btn-sm">Explore in Money Buddy</a>
       </div>
     </article>
 
-    <div class="insights-stack" aria-label="Spending insights">
+    <div class="insights-stack" id="home-insights-stack" aria-label="Spending insights">
       {% for insight in insights %}
-        <article class="insight-card">
+        <article class="insight-card" data-insight-id="{{ insight.id }}">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
             <h3 style="font-size: 1.08rem;">{{ insight.title }}</h3>
             {{ Pill(insight.metric, tone=insight.tone) }}
           </div>
-          <p style="font-size: 0.92rem; color: var(--ink-muted);">{{ insight.body }}</p>
+          <p style="font-size: 0.92rem; color: var(--ink-muted);" data-insight-body>{{ insight.body }}</p>
+          <div style="margin-top: 12px;">
+            <a href="/money-buddy?q={{ insight.buddy_question | urlencode }}" class="btn btn-secondary btn-sm" data-insight-action>
+              <i data-lucide="message-circle" aria-hidden="true" width="14" height="14"></i>
+              <span>What can I do?</span>
+            </a>
+          </div>
         </article>
       {% endfor %}
     </div>

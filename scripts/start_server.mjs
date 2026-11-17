@@ -47,12 +47,22 @@ function bootstrapPythonEnv() {
 
   console.log('[SpendSense] Installing FastAPI server dependencies...');
   execSync(
-    `"${uvBin}" pip install --python "${resolve(venvDir, 'bin/python')}" fastapi "uvicorn[standard]" jinja2 babel pydantic-settings python-multipart sqlalchemy argon2-cffi pillow slowapi pytest httpx`,
+    `"${uvBin}" pip install --python "${resolve(venvDir, 'bin/python')}" -r "${resolve(root, 'requirements.txt')}"`,
     { stdio: 'inherit' },
   );
 }
 
-if (!existsSync(uvicornBin)) {
+const pyBin = resolve(venvDir, 'bin', 'python');
+let hasDeps = existsSync(uvicornBin) && existsSync(pyBin);
+if (hasDeps) {
+  try {
+    execSync(`"${pyBin}" -c "import google.genai"`, { stdio: 'ignore' });
+  } catch {
+    hasDeps = false;
+  }
+}
+
+if (!hasDeps) {
   bootstrapPythonEnv();
 }
 

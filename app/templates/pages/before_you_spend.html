@@ -24,13 +24,13 @@
       <div class="card-header">
         <div>
           <h2 class="card-title" id="bys-inputs-title">Your scenario</h2>
-          <p class="card-subtitle">Pre-filled from Riya's November numbers</p>
+          <p class="card-subtitle">{{ "Pre-filled from Riya's November numbers" if user.is_demo else "Pre-filled from your " ~ user.currency ~ " numbers" }}</p>
         </div>
         <div>
           <label class="sr-only" for="full-currency">Currency</label>
           <select id="full-currency" class="select" style="min-height: 36px; padding: 4px 10px; font-size: 0.84rem;" data-bys-currency>
             {% for c in currencies %}
-              <option value="{{ c.code }}" data-symbol="{{ c.symbol }}" data-locale="{{ c.locale }}" data-precision="{{ c.precision }}" data-rate="{{ c.rate_from_inr }}" {{ 'selected' if c.code == 'INR' else '' }}>
+              <option value="{{ c.code }}" data-symbol="{{ c.symbol }}" data-locale="{{ c.locale }}" data-precision="{{ c.precision }}" data-rate="{{ c.rate_from_inr }}" {{ 'selected' if c.code == user.currency else '' }}>
                 {{ c.code }} ({{ c.symbol }})
               </option>
             {% endfor %}
@@ -40,14 +40,14 @@
 
       <form id="full-bys-form" data-bys-root="full" class="stack-md" novalidate>
         {{ Input("item_name", "What are you thinking of buying?", value=default_item, placeholder="e.g. Headphones, Goa bus ticket, textbook", id="full-item") }}
-        {{ Input("purchase", "Purchase price", value="1199", type="number", min="0", step="1", prefix="₹", id="full-purchase") }}
+        {{ Input("purchase", "Purchase price", value=defaults.purchase, type="number", min="0", step="1", prefix=currency_symbol, id="full-purchase") }}
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          {{ Input("balance", "Current balance", value="2480", type="number", min="0", step="1", prefix="₹", id="full-balance") }}
-          {{ Input("essentials", "Upcoming essentials", value="850", type="number", min="0", step="1", prefix="₹", id="full-essentials") }}
+          {{ Input("balance", "Current balance", value=defaults.balance, type="number", min="0", step="1", prefix=currency_symbol, id="full-balance") }}
+          {{ Input("essentials", "Upcoming essentials", value=defaults.essentials, type="number", min="0", step="1", prefix=currency_symbol, id="full-essentials") }}
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          {{ Input("days", "Days until next income", value="12", type="number", min="1", max="365", step="1", id="full-days") }}
-          {{ Input("threshold", "Daily comfort floor", value="100", type="number", min="0", step="1", prefix="₹", id="full-threshold", hint="Tight if daily allowance falls below this.") }}
+          {{ Input("days", "Days until next income", value=defaults.days, type="number", min="1", max="365", step="1", id="full-days") }}
+          {{ Input("threshold", "Daily comfort floor", value=defaults.threshold, type="number", min="0", step="1", prefix=currency_symbol, id="full-threshold", hint="Tight if daily allowance falls below this.") }}
         </div>
       </form>
     </section>
@@ -81,6 +81,25 @@
               <div class="verdict-metric-val money" id="full-daily-val">{{ sim.formatted.daily_after }}/day</div>
             </div>
           </div>
+        </div>
+
+        <!-- Plain-language AI explanation (strictly uses computed numbers) -->
+        <div class="ai-explain-card" id="bys-ai-card">
+          <div class="ai-status-row" style="margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <h3 style="font-size: 0.96rem;">Plain-language take</h3>
+              <span class="offline-badge" id="bys-offline-badge" {% if not offline_mode %}hidden{% endif %}>Offline mode</span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="bys-explain-btn">Refresh take</button>
+          </div>
+          <div id="bys-ai-loading" hidden class="stack-sm" style="margin-bottom: 8px;" aria-label="Generating explanation">
+            <div class="skeleton-row" style="height: 18px;"></div>
+            <div class="skeleton-row" style="height: 18px; width: 78%;"></div>
+          </div>
+          <div class="state-banner state-banner-error" id="bys-ai-error" hidden style="margin-bottom: 8px;">
+            <span id="bys-ai-error-text">Could not load plain-language explanation right now.</span>
+          </div>
+          <p id="bys-ai-text" style="font-size: 0.92rem; color: var(--ink); line-height: 1.6;">{{ sim.verdict_summary }}</p>
         </div>
 
         <!-- Before / After Comparison Bar -->
@@ -134,7 +153,7 @@
           <span style="font-size: 0.88rem; color: var(--ink-muted);">Rather keep your runway green?</span>
         </div>
         <div class="state-banner" id="goal-saved-banner" hidden style="margin-top: 12px;">
-          <span id="goal-saved-text">Added to your Stage 1 goal preview!</span>
+          <span id="goal-saved-text">Added to your goal preview!</span>
           <a href="/goals" style="color: var(--primary); font-weight: 600;">View goals →</a>
         </div>
       </section>

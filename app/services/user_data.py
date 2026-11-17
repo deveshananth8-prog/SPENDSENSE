@@ -16,8 +16,19 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Budget, Goal, Transaction, User
 from app.security import hash_password
+from app.services.ai_client import (
+    _offline_home_narrative,
+    _offline_money_buddy,
+    is_ai_configured,
+)
 from app.services.avatars import delete_avatar_file
-from app.services.money import format_money, get_currency_list, load_currency_catalog
+from app.services.money import (
+    format_money,
+    get_currency_list,
+    load_currency_catalog,
+    minor_to_decimal,
+)
+from app.services.snapshot import build_financial_snapshot
 from app.services.stage1_data import compute_before_you_spend, compute_runway
 from data.sample_data import (
     CATEGORIES,
@@ -182,11 +193,34 @@ def delete_user_account(db: Session, user: User, upload_dir: Path | None = None)
 
 
 def _estimate_balance_minor(user: User, transactions: list[Transaction]) -> int:
-    if user.is_demo:
-        return RIYA_PROFILE["current_balance_minor"]
     income_tx = sum(t.amount_minor for t in transactions if t.type == "income")
     expense_tx = sum(t.amount_minor for t in transactions if t.type != "income")
+    if user.is_demo:
+        return max(RIYA_PROFILE["current_balance_minor"] + income_tx - max(expense_tx - 373700, 0), 0)
     return user.monthly_allowance_minor + income_tx - expense_tx
+
+
+def _currency_symbol(currency_code: str) -> str:
+    catalog = load_currency_catalog().get("currencies", {})
+    meta = catalog.get((currency_code or "INR").upper())
+    return meta["symbol"] if meta else currency_code
+
+
+def _save_chip_minor(currency_code: str) -> int:
+    catalog = load_currency_catalog().get("currencies", {})
+    meta = catalog.get((currency_code or "INR").upper())
+    rate = Decimal(str(meta.get("rate_from_inr", "1"))) if meta else Decimal("1")
+    inr_1000 = Decimal("1000") * rate
+    if inr_1000 >= Decimal("500"):
+        major = int((inr_1000 / Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 100
+    elif inr_1000 >= Decimal("50"):
+        major = int((inr_1000 / Decimal("10")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 10
+    else:
+        major = max(int((inr_1000 / Decimal("5")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 5, 5)
+    from babel.numbers import get_currency_precision
+
+    precision = get_currency_precision(currency_code)
+    return major * (10 ** precision)
 
 
 def build_home_context(db: Session, user: User) -> dict[str, Any]:
@@ -213,7 +247,11 @@ def build_home_context(db: Session, user: User) -> dict[str, Any]:
             "amount_minor": t.amount_minor,
             "essential": t.essential,
             "method": t.method,
-            "amount_formatted": format_money(t.amount_minor, currency, locale),
+            "amount_formatted": format_money(
+                t.amount_minor,
+                t.currency_code or currency,
+                _locale_for_currency(t.currency_code or currency),
+            ),
         }
         for t in expense_txs
     ]
@@ -235,47 +273,12 @@ def build_home_context(db: Session, user: User) -> dict[str, Any]:
 
     chart_data = {
         "labels": [c[0] for c in sorted_cats] if sorted_cats else ["No expenses yet"],
-        "values_major": [float(Decimal(c[1]) / Decimal(100)) for c in sorted_cats] if sorted_cats else [1],
+        "values_major": [float(minor_to_decimal(c[1], currency)) for c in sorted_cats] if sorted_cats else [1],
         "formatted": [format_money(c[1], currency, locale) for c in sorted_cats] if sorted_cats else [format_money(0, currency, locale)],
     }
 
-    if tx_dicts:
-        monthly_summary = (
-            f"You have spent {format_money(total_expenses_minor, currency, locale)} against your "
-            f"{u['monthly_allowance_formatted']} allowance. After setting aside "
-            f"{format_money(essentials_minor, currency, locale)} for essentials, you can spend up to "
-            f"{runway['formatted']['max_per_day']} a day without dipping early."
-        )
-    else:
-        monthly_summary = (
-            "No expenses logged yet. Add your monthly allowance in Profile or record your first expense "
-            "to bring your Money Runway and category breakdown to life."
-        )
-
-    insights = [
-        {
-            "title": "Weekend spend runs 1.6x higher" if user.is_demo else "Daily pace check",
-            "metric": "1.6x ratio" if user.is_demo else runway["formatted"]["avg_daily_spend"],
-            "body": (
-                f"Your weekend outings and late-night Zomato orders average {format_money(31250, currency, locale)} "
-                f"per weekend vs {format_money(9629, currency, locale)}/day on weekdays."
-                if user.is_demo
-                else f"Your current daily pace is {runway['formatted']['avg_daily_spend']} with {u['days_until_income']} days until next income."
-            ),
-            "tone": "warn" if user.is_demo else "ok",
-        },
-        {
-            "title": "Most frequent small spend: Evening chai" if user.is_demo else "Safe spending cushion",
-            "metric": f"{format_money(4000, currency, locale)} each" if user.is_demo else runway["status"],
-            "body": (
-                f"Small tap-and-pay chai and snack trips stay well under budget, and cutting just two food delivery "
-                f"orders frees {format_money(43000, currency, locale)} toward your headphones goal."
-                if user.is_demo
-                else "Test any upcoming purchase in Before You Spend before tapping pay."
-            ),
-            "tone": "ok",
-        },
-    ]
+    snapshot = build_financial_snapshot(db, user)
+    narrative = _offline_home_narrative(snapshot)
 
     return {
         "user": u,
@@ -293,17 +296,25 @@ def build_home_context(db: Session, user: User) -> dict[str, Any]:
         },
         "chart_data": chart_data,
         "recent_transactions": tx_dicts[:5],
-        "monthly_summary": monthly_summary,
-        "insights": insights,
+        "monthly_summary": narrative.monthly_summary,
+        "insights": narrative.insights,
+        "offline_mode": not is_ai_configured(),
     }
 
 
 def build_before_you_spend_context(db: Session, user: User) -> dict[str, Any]:
     u = user_view_dict(user)
+    currency = u["currency"]
+    locale = u["locale"]
     txs = get_user_transactions(db, user.id)
     balance_minor = _estimate_balance_minor(user, txs)
     essentials_minor = RIYA_PROFILE["upcoming_essentials_minor"] if user.is_demo else 0
-    default_purchase = 119900 if user.is_demo else 0
+    if user.is_demo:
+        default_purchase = 119900
+    elif balance_minor > 0:
+        default_purchase = max(balance_minor // 5, 1)
+    else:
+        default_purchase = 0
 
     sim = compute_before_you_spend(
         balance_minor=balance_minor,
@@ -311,15 +322,31 @@ def build_before_you_spend_context(db: Session, user: User) -> dict[str, Any]:
         purchase_minor=default_purchase,
         days_until_income=u["days_until_income"],
         tight_threshold_minor=u["tight_threshold_minor"],
-        currency=u["currency"],
-        locale=u["locale"],
+        currency=currency,
+        locale=locale,
     )
+
+    def _major_str(minor: int) -> str:
+        val = minor_to_decimal(minor, currency)
+        if val == val.to_integral_value():
+            return str(int(val))
+        return format(val, "f").rstrip("0").rstrip(".")
+
     return {
         "user": u,
         "active_nav": "before_you_spend",
         "sim": sim,
         "default_item": "JBL Go Portable Speaker" if user.is_demo else "New Purchase",
+        "currency_symbol": _currency_symbol(currency),
+        "defaults": {
+            "purchase": _major_str(default_purchase),
+            "balance": _major_str(balance_minor),
+            "essentials": _major_str(essentials_minor),
+            "days": str(u["days_until_income"]),
+            "threshold": _major_str(u["tight_threshold_minor"]),
+        },
         "currencies": get_currency_list(),
+        "offline_mode": not is_ai_configured(),
     }
 
 
@@ -327,66 +354,36 @@ def build_money_buddy_context(db: Session, user: User) -> dict[str, Any]:
     u = user_view_dict(user)
     currency = u["currency"]
     locale = u["locale"]
-    txs = get_user_transactions(db, user.id)
-    total_spent = sum(t.amount_minor for t in txs if t.type != "income")
-    save_chip_amount = format_money(100000, currency, locale)
+    snapshot = build_financial_snapshot(db, user)
+    save_chip_amount = format_money(_save_chip_minor(currency), currency, locale)
 
-    chips = [
-        {
-            "id": "top-spend",
-            "label": "Where am I spending most of my money?",
-            "answer": (
-                f"Your recorded expenses total {format_money(total_spent, currency, locale)} across {len(txs)} transactions. "
-                + ("Food & Mess leads your spending this month." if txs else "Add expenses to see your top category here.")
-            ),
-            "next_step": "Check your Budgets tab to compare category caps against actual spend.",
-            "why": [
-                f"Total tracked expenses: {format_money(total_spent, currency, locale)}",
-                f"Transactions logged: {len(txs)}",
-                f"Monthly allowance: {u['monthly_allowance_formatted']}",
-            ],
-        },
-        {
-            "id": "save-target",
-            "label": f"How can I save {save_chip_amount} this month?",
-            "answer": f"Holding daily non-essential spend steady over the next {u['days_until_income']} days protects your buffer.",
-            "next_step": "Move a small weekly amount into Goals right after receiving your allowance.",
-            "why": [
-                f"Days until next income: {u['days_until_income']}",
-                f"Target savings check: {save_chip_amount}",
-            ],
-        },
-        {
-            "id": "food-check",
-            "label": "Am I spending too much on food?",
-            "answer": "Food & Mess spending is tracked directly against your monthly Food & Mess budget.",
-            "next_step": "Compare delivery orders vs fixed mess/grocery spend on the Expenses page.",
-            "why": [f"Currency: {currency}", f"Logged entries: {len(txs)}"],
-        },
-        {
-            "id": "summarise",
-            "label": "Summarise my spending.",
-            "answer": f"You have logged {format_money(total_spent, currency, locale)} across {len(txs)} entries against an allowance of {u['monthly_allowance_formatted']}.",
-            "next_step": "Run any upcoming purchase through Before You Spend before paying.",
-            "why": [
-                f"Allowance: {u['monthly_allowance_formatted']}",
-                f"Spent to date: {format_money(total_spent, currency, locale)}",
-            ],
-        },
-        {
-            "id": "improve-budget",
-            "label": "How can I improve my budget?",
-            "answer": "Keep recurring essentials covered first, then cap discretionary categories based on your remaining days.",
-            "next_step": "Review your category progress bars on the Budgets page.",
-            "why": [f"Working currency: {currency}", f"Comfort floor: {u['tight_threshold_formatted']}/day"],
-        },
+    chip_specs = [
+        ("top-spend", "Where am I spending most of my money?"),
+        ("save-target", f"How can I save {save_chip_amount} this month?"),
+        ("food-check", "Am I spending too much on food?"),
+        ("summarise", "Summarise my spending."),
+        ("improve-budget", "How can I improve my budget?"),
     ]
+
+    chips = []
+    for chip_id, label in chip_specs:
+        res = _offline_money_buddy(label, snapshot)
+        chips.append(
+            {
+                "id": chip_id,
+                "label": label,
+                "answer": res.answer,
+                "next_step": res.next_step,
+                "why": res.why,
+            }
+        )
 
     return {
         "user": u,
         "active_nav": "money_buddy",
         "chips": chips,
         "initial_entry": chips[0],
+        "offline_mode": not is_ai_configured(),
     }
 
 
@@ -403,20 +400,30 @@ def build_expenses_context(db: Session, user: User) -> dict[str, Any]:
             "merchant": t.merchant,
             "note": t.description,
             "category": t.category,
+            "type": t.type,
+            "currency": t.currency_code or currency,
             "method": t.method,
             "amount_minor": t.amount_minor,
-            "amount_formatted": format_money(t.amount_minor, currency, locale),
+            "amount_formatted": format_money(
+                t.amount_minor,
+                t.currency_code or currency,
+                _locale_for_currency(t.currency_code or currency),
+            ),
         }
         for t in txs
     ]
-    total_minor = sum(t.amount_minor for t in txs)
+    total_minor = sum(t.amount_minor for t in txs if t.type != "income")
     return {
         "user": u,
         "active_nav": "expenses",
         "categories": CATEGORIES,
+        "currencies": get_currency_list(),
+        "currency_symbol": _currency_symbol(currency),
+        "today_iso": date.today().isoformat(),
         "expenses": expenses,
         "total_formatted": format_money(total_minor, currency, locale),
         "count": len(expenses),
+        "offline_mode": not is_ai_configured(),
     }
 
 

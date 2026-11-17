@@ -23,6 +23,7 @@ from app.services.ai_client import (
 )
 from app.services.avatars import delete_avatar_file
 from app.services.money import (
+    convert_minor_amount,
     format_money,
     get_currency_list,
     load_currency_catalog,
@@ -192,11 +193,17 @@ def delete_user_account(db: Session, user: User, upload_dir: Path | None = None)
     db.commit()
 
 
+def _demo_scaled_minor(inr_minor: int, currency_code: str) -> int:
+    return convert_minor_amount(inr_minor, "INR", currency_code or "INR")
+
+
 def _estimate_balance_minor(user: User, transactions: list[Transaction]) -> int:
     income_tx = sum(t.amount_minor for t in transactions if t.type == "income")
     expense_tx = sum(t.amount_minor for t in transactions if t.type != "income")
     if user.is_demo:
-        return max(RIYA_PROFILE["current_balance_minor"] + income_tx - max(expense_tx - 373700, 0), 0)
+        base_bal = _demo_scaled_minor(RIYA_PROFILE["current_balance_minor"], user.currency_code)
+        base_exp = _demo_scaled_minor(373700, user.currency_code)
+        return max(base_bal + income_tx - max(expense_tx - base_exp, 0), 0)
     return user.monthly_allowance_minor + income_tx - expense_tx
 
 
@@ -234,7 +241,7 @@ def build_home_context(db: Session, user: User) -> dict[str, Any]:
     expense_txs = [t for t in txs if t.type != "income"]
     total_expenses_minor = sum(t.amount_minor for t in expense_txs)
     balance_minor = _estimate_balance_minor(user, txs)
-    essentials_minor = RIYA_PROFILE["upcoming_essentials_minor"] if user.is_demo else 0
+    essentials_minor = _demo_scaled_minor(RIYA_PROFILE["upcoming_essentials_minor"], currency) if user.is_demo else 0
     savings_minor = sum(g.saved_minor for g in goals)
 
     tx_dicts = [
@@ -289,9 +296,12 @@ def build_home_context(db: Session, user: User) -> dict[str, Any]:
             "balance_minor": balance_minor,
             "essentials_formatted": format_money(essentials_minor, currency, locale),
             "income": u["monthly_allowance_formatted"],
+            "income_minor": user.monthly_allowance_minor,
             "expenses": format_money(total_expenses_minor, currency, locale),
+            "expenses_minor": total_expenses_minor,
             "tx_count": len(expense_txs),
             "savings": format_money(savings_minor, currency, locale),
+            "savings_minor": savings_minor,
             "goal_count": len(goals),
         },
         "chart_data": chart_data,
@@ -307,10 +317,11 @@ def build_before_you_spend_context(db: Session, user: User) -> dict[str, Any]:
     currency = u["currency"]
     locale = u["locale"]
     txs = get_user_transactions(db, user.id)
+    expense_txs = [t for t in txs if t.type != "income"]
     balance_minor = _estimate_balance_minor(user, txs)
-    essentials_minor = RIYA_PROFILE["upcoming_essentials_minor"] if user.is_demo else 0
+    essentials_minor = _demo_scaled_minor(RIYA_PROFILE["upcoming_essentials_minor"], currency) if user.is_demo else 0
     if user.is_demo:
-        default_purchase = 119900
+        default_purchase = _demo_scaled_minor(119900, currency)
     elif balance_minor > 0:
         default_purchase = max(balance_minor // 5, 1)
     else:
@@ -326,6 +337,26 @@ def build_before_you_spend_context(db: Session, user: User) -> dict[str, Any]:
         locale=locale,
     )
 
+    tx_for_runway = [{"amount_minor": t.amount_minor, "essential": t.essential} for t in expense_txs]
+    runway_before = compute_runway(
+        balance_minor=balance_minor,
+        essentials_minor=essentials_minor,
+        days_until_income=u["days_until_income"],
+        expenses=tx_for_runway,
+        today=date.today(),
+        currency=currency,
+        locale=locale,
+    )
+    runway_after = compute_runway(
+        balance_minor=max(balance_minor - default_purchase, 0),
+        essentials_minor=essentials_minor,
+        days_until_income=u["days_until_income"],
+        expenses=tx_for_runway,
+        today=date.today(),
+        currency=currency,
+        locale=locale,
+    )
+
     def _major_str(minor: int) -> str:
         val = minor_to_decimal(minor, currency)
         if val == val.to_integral_value():
@@ -336,6 +367,9 @@ def build_before_you_spend_context(db: Session, user: User) -> dict[str, Any]:
         "user": u,
         "active_nav": "before_you_spend",
         "sim": sim,
+        "runway_before": runway_before,
+        "runway_after": runway_after,
+        "avg_daily_spend_minor": runway_before["avg_daily_spend_minor"],
         "default_item": "JBL Go Portable Speaker" if user.is_demo else "New Purchase",
         "currency_symbol": _currency_symbol(currency),
         "defaults": {
@@ -478,6 +512,10 @@ def build_budgets_context(db: Session, user: User) -> dict[str, Any]:
     return {
         "user": u,
         "active_nav": "budgets",
+        "month_label": date.today().strftime("%B %Y"),
+        "currency_symbol": _currency_symbol(currency),
+        "categories": CATEGORIES,
+        "category_count": len(items),
         "budgets": items,
         "total_limit_formatted": format_money(total_limit, currency, locale),
         "total_spent_formatted": format_money(total_spent, currency, locale),
@@ -518,20 +556,145 @@ def build_goals_context(db: Session, user: User) -> dict[str, Any]:
     return {
         "user": u,
         "active_nav": "goals",
+        "currency_symbol": _currency_symbol(currency),
+        "today_iso": date.today().isoformat(),
         "goals": goals,
         "total_saved_formatted": format_money(total_saved, currency, locale),
         "total_target_formatted": format_money(total_target, currency, locale),
     }
 
 
+def _major_input_str(amount_minor: int, currency_code: str) -> str:
+    val = minor_to_decimal(amount_minor, currency_code)
+    if val == val.to_integral_value():
+        return str(int(val))
+    return format(val, "f").rstrip("0").rstrip(".")
+
+
 def build_profile_context(user: User, **messages: Any) -> dict[str, Any]:
     u = user_view_dict(user)
     catalog = load_currency_catalog()
     currency_meta = catalog.get("currencies", {}).get(u["currency"], {})
+    from babel.numbers import get_currency_precision
+
+    precision = get_currency_precision(u["currency"])
     return {
         "user": u,
         "active_nav": "profile",
         "currency_display": f"{u['currency']} ({currency_meta.get('symbol', u['currency'])}) — {currency_meta.get('name', u['currency'])}",
+        "currencies": get_currency_list(),
+        "allowance_major": _major_input_str(user.monthly_allowance_minor, u["currency"]),
+        "tight_threshold_major": _major_input_str(user.tight_threshold_minor, u["currency"]),
+        "currency_precision": precision,
         "rates_as_of": catalog.get("as_of", "2026-11-01"),
         **messages,
     }
+
+
+def preview_currency_conversion(db: Session, user: User, target_currency: str) -> dict[str, Any]:
+    src = (user.currency_code or "INR").upper()
+    dst = (target_currency or src).strip().upper()
+    catalog = load_currency_catalog()
+    currencies = catalog.get("currencies", {})
+    if dst not in currencies:
+        raise ValueError("Unsupported target currency.")
+
+    src_meta = currencies[src]
+    dst_meta = currencies[dst]
+    src_locale = src_meta["locale"]
+    dst_locale = dst_meta["locale"]
+
+    txs = get_user_transactions(db, user.id)
+    budgets = get_user_budgets(db, user.id)
+    goals = get_user_goals(db, user.id)
+
+    tx_total_src = sum(t.amount_minor for t in txs if t.type != "income")
+    tx_total_dst = sum(convert_minor_amount(t.amount_minor, t.currency_code or src, dst) for t in txs if t.type != "income")
+
+    budget_total_src = sum(b.limit_minor for b in budgets)
+    budget_total_dst = sum(convert_minor_amount(b.limit_minor, src, dst) for b in budgets)
+
+    goal_total_src = sum(g.saved_minor for g in goals)
+    goal_total_dst = sum(convert_minor_amount(g.saved_minor, src, dst) for g in goals)
+
+    allowance_dst = convert_minor_amount(user.monthly_allowance_minor, src, dst)
+    threshold_dst = convert_minor_amount(user.tight_threshold_minor, src, dst)
+
+    src_rate = Decimal(str(src_meta["rate_from_inr"]))
+    dst_rate = Decimal(str(dst_meta["rate_from_inr"]))
+    cross_rate = (dst_rate / src_rate).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+    return {
+        "from_currency": src,
+        "to_currency": dst,
+        "to_symbol": dst_meta["symbol"],
+        "to_name": dst_meta["name"],
+        "same_currency": src == dst,
+        "rate_display": f"1 {src} ≈ {cross_rate} {dst}",
+        "as_of": catalog.get("as_of", "2026-11-01"),
+        "rows": [
+            {
+                "label": "Monthly allowance",
+                "before": format_money(user.monthly_allowance_minor, src, src_locale),
+                "after": format_money(allowance_dst, dst, dst_locale),
+            },
+            {
+                "label": "Daily comfort floor",
+                "before": format_money(user.tight_threshold_minor, src, src_locale),
+                "after": format_money(threshold_dst, dst, dst_locale),
+            },
+            {
+                "label": f"Expenses ({len([t for t in txs if t.type != 'income'])} entries)",
+                "before": format_money(tx_total_src, src, src_locale),
+                "after": format_money(tx_total_dst, dst, dst_locale),
+            },
+            {
+                "label": f"Monthly budgets ({len(budgets)})",
+                "before": format_money(budget_total_src, src, src_locale),
+                "after": format_money(budget_total_dst, dst, dst_locale),
+            },
+            {
+                "label": f"Goals saved ({len(goals)})",
+                "before": format_money(goal_total_src, src, src_locale),
+                "after": format_money(goal_total_dst, dst, dst_locale),
+            },
+        ],
+    }
+
+
+def convert_user_currency(db: Session, user: User, target_currency: str) -> User:
+    src = (user.currency_code or "INR").upper()
+    dst = (target_currency or src).strip().upper()
+    catalog = load_currency_catalog().get("currencies", {})
+    if dst not in catalog:
+        raise ValueError("Unsupported target currency.")
+    if src == dst:
+        return user
+
+    db_user = db.query(User).filter(User.id == user.id).first()
+    if not db_user:
+        raise ValueError("User not found.")
+
+    db_user.monthly_allowance_minor = convert_minor_amount(db_user.monthly_allowance_minor, src, dst)
+    db_user.tight_threshold_minor = convert_minor_amount(db_user.tight_threshold_minor, src, dst)
+
+    txs = get_user_transactions(db, db_user.id)
+    for t in txs:
+        t_src = (t.currency_code or src).upper()
+        t.amount_minor = max(convert_minor_amount(t.amount_minor, t_src, dst), 1 if t.amount_minor > 0 else 0)
+        t.currency_code = dst
+
+    budgets = get_user_budgets(db, db_user.id)
+    for b in budgets:
+        b.limit_minor = convert_minor_amount(b.limit_minor, src, dst)
+
+    goals = get_user_goals(db, db_user.id)
+    for g in goals:
+        g.target_minor = max(convert_minor_amount(g.target_minor, src, dst), 1 if g.target_minor > 0 else 0)
+        g.saved_minor = convert_minor_amount(g.saved_minor, src, dst)
+
+    db_user.currency_code = dst
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+

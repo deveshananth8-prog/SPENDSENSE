@@ -64,3 +64,26 @@ def format_money(amount_minor: int, currency_code: str = "INR", locale: str = "e
     if precision == 0 and "." in formatted:
         formatted = formatted.split(".")[0]
     return formatted
+
+
+def convert_minor_amount(amount_minor: int, from_currency: str, to_currency: str) -> int:
+    """Convert integer minor-unit amount between currencies using static Decimal rates and ROUND_HALF_UP."""
+    src = (from_currency or "INR").upper()
+    dst = (to_currency or "INR").upper()
+    if src == dst or amount_minor == 0:
+        return amount_minor
+
+    catalog = load_currency_catalog().get("currencies", {})
+    src_meta = catalog.get(src)
+    dst_meta = catalog.get(dst)
+    if not src_meta or not dst_meta:
+        raise ValueError(f"Unsupported currency conversion: {src} -> {dst}")
+
+    src_rate = Decimal(str(src_meta["rate_from_inr"]))
+    dst_rate = Decimal(str(dst_meta["rate_from_inr"]))
+    src_major = minor_to_decimal(amount_minor, src)
+    dst_major = (src_major / src_rate) * dst_rate
+    dst_precision = get_currency_precision(dst)
+    scale = Decimal(10) ** dst_precision
+    return int((dst_major * scale).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+

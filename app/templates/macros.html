@@ -138,10 +138,10 @@
       <div class="runway-track">
         <div class="runway-fill tone-{{ runway.status_tone }}" style="width: {{ runway.runout_pct }}%;"></div>
         <div class="runway-marker runway-marker-income" style="left: {{ runway.income_pct }}%;">
-          <span class="runway-marker-label runway-marker-label-top {{ 'runway-marker-label-end' if runway.income_pct > 65 else '' }}">Next allowance · {{ runway.next_income_str }}</span>
+          <span class="runway-marker-label runway-marker-label-top {{ 'runway-marker-label-end' if runway.income_pct > 65 else ('runway-marker-label-start' if runway.income_pct < 28 else '') }}">Next allowance · {{ runway.next_income_str }}</span>
         </div>
         <div class="runway-marker" style="left: {{ runway.runout_pct }}%;">
-          <span class="runway-marker-label runway-marker-label-bottom {{ 'runway-marker-label-end' if runway.runout_pct > 65 else '' }}">Projected end · {{ runway.run_out_str }} ({{ runway.runway_days }}d)</span>
+          <span class="runway-marker-label runway-marker-label-bottom {{ 'runway-marker-label-end' if runway.runout_pct > 65 else ('runway-marker-label-start' if runway.runout_pct < 28 else '') }}">Projected end · {{ runway.run_out_str }} ({{ runway.runway_days }}d)</span>
         </div>
       </div>
     </div>

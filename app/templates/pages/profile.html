@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import Avatar, Input, ThemeToggle, Modal %}
+{% from "macros.html" import Avatar, Input, ThemeToggle, Modal, CurrencyPicker %}
 
 {% block title %}Profile & Settings — SpendSense{% endblock %}
 
@@ -93,20 +93,74 @@
 
         <form id="profile-settings-form" method="post" action="/profile/info" class="stack-md">
           <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="form-grid-2">
             {{ Input("display_name", "Display name", value=user.display_name, required=True) }}
             {{ Input("email", "Email address", value=user.email, type="email", readonly=True, hint="Read-only account email.") }}
           </div>
 
-          {{ Input("currency_display", "Working currency", value=currency_display, readonly=True, hint="Stored on your account. Currency switching arrives in a later stage.") }}
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            {{ Input("allowance", "Monthly allowance", value=(user.monthly_allowance_minor // 100) if user.currency != 'KWD' else user.monthly_allowance_minor, type="number", min="0", step="1") }}
+          <div class="form-grid-2">
+            {{ Input("allowance", "Monthly allowance (" ~ user.currency ~ ")", value=allowance_major, type="number", min="0", step=("1" if currency_precision == 0 else ("0.001" if currency_precision == 3 else "0.01"))) }}
             {{ Input("next_income", "Next income date", value=user.next_income_date, type="date") }}
           </div>
 
+          {{ Input("tight_threshold", "Daily comfort floor (" ~ user.currency ~ ")", value=tight_threshold_major, type="number", min="0", step=("1" if currency_precision == 0 else ("0.001" if currency_precision == 3 else "0.01")), hint="Before You Spend marks a buy Tight if your daily budget drops below this.") }}
+
           <div style="display: flex; justify-content: flex-end;">
             <button type="submit" class="btn btn-primary">Save preferences</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="currency-convert-title">
+        <h2 class="card-title" id="currency-convert-title" style="margin-bottom: 6px;">Working currency &amp; conversion</h2>
+        <p class="card-subtitle" style="margin-bottom: 14px;">
+          Current currency: <strong>{{ currency_display }}</strong>. Preview before converting all saved amounts (approximate static rates as of {{ rates_as_of }}).
+        </p>
+
+        {% if currency_error %}
+          <div class="state-banner state-banner-error" role="alert" style="margin-bottom: 14px;">
+            <span>{{ currency_error }}</span>
+          </div>
+        {% elif currency_success %}
+          <div class="state-banner" role="status" style="margin-bottom: 14px;">
+            <span>{{ currency_success }}</span>
+          </div>
+        {% endif %}
+
+        <div class="state-banner state-banner-error" id="currency-preview-error" hidden role="alert" style="margin-bottom: 12px;">
+          <span id="currency-preview-error-text">Could not load conversion preview.</span>
+        </div>
+
+        <form method="post" action="/profile/currency/convert" id="profile-currency-form" class="stack-md">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+          <div class="field">
+            <span class="field-label">Switch working currency</span>
+            {{ CurrencyPicker(currencies, selected_code=user.currency, input_name="target_currency", id_prefix="profile-cp") }}
+          </div>
+
+          <div id="currency-preview-panel" class="conversion-preview-box" hidden aria-live="polite">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
+              <strong>Conversion preview</strong>
+              <span class="meta-line" id="currency-preview-rate"></span>
+            </div>
+            <table class="conversion-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th class="num">Before</th>
+                  <th class="num">After</th>
+                </tr>
+              </thead>
+              <tbody id="currency-preview-rows"></tbody>
+            </table>
+            <p style="font-size: 0.78rem; color: var(--ink-muted); margin-top: 8px;">
+              Uses approximate static exchange rates for budgeting convenience — not live market quotes.
+            </p>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" id="preview-currency-btn">Preview conversion</button>
+            <button type="submit" class="btn btn-primary" id="convert-currency-submit">Convert &amp; switch</button>
           </div>
         </form>
       </section>
@@ -127,7 +181,7 @@
         <form method="post" action="/profile/password" class="stack-md">
           <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
           {{ Input("current_password", "Current password", type="password", placeholder="Enter current password", required=True) }}
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="form-grid-2">
             {{ Input("new_password", "New password", type="password", placeholder="Min 8 characters", required=True) }}
             {{ Input("confirm_new_password", "Confirm new password", type="password", placeholder="Repeat password", required=True) }}
           </div>

@@ -28,7 +28,7 @@
         </div>
         <div>
           <label class="sr-only" for="full-currency">Currency</label>
-          <select id="full-currency" class="select" style="min-height: 36px; padding: 4px 10px; font-size: 0.84rem;" data-bys-currency>
+          <select id="full-currency" class="select currency-select-compact" data-bys-currency>
             {% for c in currencies %}
               <option value="{{ c.code }}" data-symbol="{{ c.symbol }}" data-locale="{{ c.locale }}" data-precision="{{ c.precision }}" data-rate="{{ c.rate_from_inr }}" {{ 'selected' if c.code == user.currency else '' }}>
                 {{ c.code }} ({{ c.symbol }})
@@ -38,14 +38,18 @@
         </div>
       </div>
 
-      <form id="full-bys-form" data-bys-root="full" class="stack-md" novalidate>
+      <div class="state-banner state-banner-error" id="full-bys-error" hidden role="alert" style="margin-bottom: 12px;">
+        <span id="full-bys-error-text">Please enter non-negative amounts and at least 1 day until next income.</span>
+      </div>
+
+      <form id="full-bys-form" data-bys-root="full" class="stack-md" data-avg-daily-minor="{{ avg_daily_spend_minor }}" data-base-currency="{{ user.currency }}" novalidate>
         {{ Input("item_name", "What are you thinking of buying?", value=default_item, placeholder="e.g. Headphones, Goa bus ticket, textbook", id="full-item") }}
         {{ Input("purchase", "Purchase price", value=defaults.purchase, type="number", min="0", step="1", prefix=currency_symbol, id="full-purchase") }}
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="form-grid-2">
           {{ Input("balance", "Current balance", value=defaults.balance, type="number", min="0", step="1", prefix=currency_symbol, id="full-balance") }}
           {{ Input("essentials", "Upcoming essentials", value=defaults.essentials, type="number", min="0", step="1", prefix=currency_symbol, id="full-essentials") }}
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="form-grid-2">
           {{ Input("days", "Days until next income", value=defaults.days, type="number", min="1", max="365", step="1", id="full-days") }}
           {{ Input("threshold", "Daily comfort floor", value=defaults.threshold, type="number", min="0", step="1", prefix=currency_symbol, id="full-threshold", hint="Tight if daily allowance falls below this.") }}
         </div>
@@ -119,6 +123,33 @@
                 <div class="progress-fill tone-{{ sim.verdict_tone }}" id="full-bar-after" style="width: 26%;"></div>
               </div>
               <strong class="money" id="full-bar-after-val">{{ sim.formatted.daily_after }}/day</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Money Runway Impact Marker -->
+        <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+            <div>
+              <h3 style="font-size: 1rem;">Money Runway impact</h3>
+              <p style="font-size: 0.84rem; color: var(--ink-muted);" id="bys-runway-headline">{{ runway_after.headline }}</p>
+            </div>
+            <span class="pill pill-{{ runway_after.status_tone }}" id="bys-runway-status-pill">
+              <span id="bys-runway-status-text">{{ runway_after.status }} ({{ runway_after.runway_days }}d)</span>
+            </span>
+          </div>
+          <div class="runway-track-wrap" style="padding: 34px 0 34px;">
+            <div class="runway-track">
+              <div class="runway-fill tone-{{ runway_after.status_tone }}" id="bys-runway-fill" style="width: {{ runway_after.runout_pct }}%;"></div>
+              <div class="runway-marker runway-marker-before" id="bys-runway-before-marker" style="left: {{ runway_before.runout_pct }}%;">
+                <span class="runway-marker-label runway-marker-label-top {{ 'runway-marker-label-end' if runway_before.runout_pct > 65 else ('runway-marker-label-start' if runway_before.runout_pct < 28 else '') }}" id="bys-runway-before-label">Now · {{ runway_before.runway_days }}d</span>
+              </div>
+              <div class="runway-marker runway-marker-income" id="bys-runway-income-marker" style="left: {{ runway_after.income_pct }}%;">
+                <span class="runway-marker-label runway-marker-label-top {{ 'runway-marker-label-end' if runway_after.income_pct > 65 else ('runway-marker-label-start' if runway_after.income_pct < 28 else '') }}" id="bys-runway-income-label">Income · {{ sim.days }}d</span>
+              </div>
+              <div class="runway-marker" id="bys-runway-after-marker" style="left: {{ runway_after.runout_pct }}%;">
+                <span class="runway-marker-label runway-marker-label-bottom {{ 'runway-marker-label-end' if runway_after.runout_pct > 65 else ('runway-marker-label-start' if runway_after.runout_pct < 28 else '') }}" id="bys-runway-after-label">After purchase · {{ runway_after.runway_days }}d</span>
+              </div>
             </div>
           </div>
         </div>

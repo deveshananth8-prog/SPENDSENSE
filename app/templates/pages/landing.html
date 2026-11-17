@@ -46,7 +46,7 @@
         </div>
         <div>
           <label class="sr-only" for="mini-currency">Currency</label>
-          <select id="mini-currency" class="select" style="min-height: 36px; padding: 4px 10px; font-size: 0.84rem;" data-bys-currency>
+          <select id="mini-currency" class="select currency-select-compact" data-bys-currency>
             {% for c in currencies %}
               <option value="{{ c.code }}" data-symbol="{{ c.symbol }}" data-locale="{{ c.locale }}" data-precision="{{ c.precision }}" data-rate="{{ c.rate_from_inr }}" {{ 'selected' if c.code == 'INR' else '' }}>
                 {{ c.code }} ({{ c.symbol }})
@@ -130,6 +130,48 @@
         Ask plain questions in English or Hinglish. Every answer shows the exact numbers behind it so you always stay in control.
       </p>
     </article>
+  </section>
+
+  <section class="landing-ai-section" id="how-ai-works" aria-labelledby="how-ai-heading">
+    <div>
+      <p class="landing-kicker" style="margin-bottom: 6px;">Transparent by design</p>
+      <h2 id="how-ai-heading" style="font-size: clamp(1.5rem, 2.5vw, 2rem);">How SpendSense uses AI</h2>
+      <p class="page-lead">AI never touches arithmetic or invents balances. Code calculates the facts; Gemini explains them in plain language.</p>
+    </div>
+
+    <div class="ai-trust-grid">
+      <article class="card">
+        <div class="benefit-num">Step 1 · Deterministic code</div>
+        <h3 style="font-size: 1.12rem; margin-bottom: 8px;">Numbers are calculated in code</h3>
+        <p class="benefit-body">
+          Your safe-to-spend balance, runway days, budget percentages, and currency conversions are computed server-side using exact integer minor units — zero floating-point guesses.
+        </p>
+      </article>
+      <article class="card">
+        <div class="benefit-num">Step 2 · Grounded AI</div>
+        <h3 style="font-size: 1.12rem; margin-bottom: 8px;">AI explains, never invents</h3>
+        <p class="benefit-body">
+          Money Buddy only receives your computed snapshot summary. If the AI service is offline or busy, SpendSense falls back seamlessly to grounded offline responses.
+        </p>
+      </article>
+      <article class="card">
+        <div class="benefit-num">Step 3 · Inspectable working</div>
+        <h3 style="font-size: 1.12rem; margin-bottom: 8px;">Every answer shows its working</h3>
+        <p class="benefit-body">
+          Open <strong>"Why this answer?"</strong> in Money Buddy or <strong>"How we calculated this"</strong> in Before You Spend to inspect the exact figures behind every suggestion.
+        </p>
+      </article>
+    </div>
+
+    <aside class="privacy-callout" aria-label="Privacy and data storage note">
+      <div style="max-width: 72ch;">
+        <h3 style="font-size: 1.05rem; margin-bottom: 4px;">Privacy &amp; what we store</h3>
+        <p style="font-size: 0.9rem; color: var(--ink-muted);">
+          Personal accounts store only your email, Argon2id-hashed password, theme and currency preferences, transactions, budgets, goals, and an optional EXIF-stripped avatar. Temporary demo accounts auto-expire, payment screenshots are parsed in memory without saving raw images, and your data is never sold or used to train models. You can delete your account and all data anytime from Profile.
+        </p>
+      </div>
+      <a href="/signup" class="btn btn-secondary btn-sm">Start privately</a>
+    </aside>
   </section>
 </div>
 {% endblock %}

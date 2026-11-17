@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import MerchantCategory, Transaction, User
+from app.models import Budget, Goal, MerchantCategory, Transaction, User
 from app.security import ai_user_rate_key, limiter, require_api_user, verify_csrf_token
 from app.services.ai_client import (
     ask_money_buddy,
@@ -360,3 +360,180 @@ async def api_explain_affordability(
     verify_csrf_token(request, None)
     res = explain_affordability_ai(payload.model_dump())
     return res.model_dump()
+
+
+class ExpenseUpdateRequest(BaseModel):
+    merchant: str = Field(..., min_length=1, max_length=120)
+    amount: str | float | int
+    category: str
+    date: str
+    note: str = Field(default="", max_length=255)
+
+
+class BudgetUpdateRequest(BaseModel):
+    category: str
+    limit: str | float | int
+
+
+class GoalCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
+    target: str | float | int
+    saved: str | float | int = 0
+    deadline: str = ""
+    note: str = Field(default="", max_length=255)
+
+
+@router.post("/expenses/{tx_id}/update")
+async def api_update_expense(
+    tx_id: int,
+    request: Request,
+    payload: ExpenseUpdateRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    verify_csrf_token(request, None)
+    tx = (
+        db.query(Transaction)
+        .filter(Transaction.id == tx_id, Transaction.user_id == user.id)
+        .first()
+    )
+    if not tx:
+        raise HTTPException(status_code=404, detail="Expense not found.")
+
+    try:
+        amt_dec = Decimal(str(payload.amount).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        raise HTTPException(status_code=400, detail="Please enter a valid positive amount.")
+    if amt_dec <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero.")
+
+    try:
+        tx_date = date.fromisoformat(payload.date.strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Please select a valid date.")
+
+    clean_merchant = payload.merchant.strip()[:120]
+    if not clean_merchant:
+        raise HTTPException(status_code=400, detail="Merchant is required.")
+    clean_category = payload.category if payload.category in CATEGORIES else "Other"
+    tx_currency = tx.currency_code or user.currency_code
+    amount_minor = to_minor_units(amt_dec, tx_currency)
+    if amount_minor <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero.")
+
+    tx.merchant = clean_merchant
+    tx.amount_minor = amount_minor
+    tx.category = clean_category
+    tx.date = tx_date
+    tx.description = payload.note.strip()[:255]
+    _remember_merchant_category(db, user.id, clean_merchant, clean_category)
+    db.commit()
+    db.refresh(tx)
+
+    locale = _locale_for_currency(tx_currency)
+    return {
+        "id": tx.id,
+        "date": tx.date.isoformat(),
+        "merchant": tx.merchant,
+        "note": tx.description,
+        "category": tx.category,
+        "currency": tx_currency,
+        "type": tx.type,
+        "method": tx.method,
+        "amount_minor": tx.amount_minor,
+        "amount_formatted": format_money(tx.amount_minor, tx_currency, locale),
+    }
+
+
+@router.post("/expenses/{tx_id}/delete")
+async def api_delete_expense(
+    tx_id: int,
+    request: Request,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    verify_csrf_token(request, None)
+    tx = (
+        db.query(Transaction)
+        .filter(Transaction.id == tx_id, Transaction.user_id == user.id)
+        .first()
+    )
+    if not tx:
+        raise HTTPException(status_code=404, detail="Expense not found.")
+    db.delete(tx)
+    db.commit()
+    return {"deleted": True, "id": tx_id}
+
+
+@router.post("/budgets/update")
+async def api_update_budget(
+    request: Request,
+    payload: BudgetUpdateRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    verify_csrf_token(request, None)
+    if payload.category not in CATEGORIES:
+        raise HTTPException(status_code=400, detail="Please choose a valid category.")
+    try:
+        limit_dec = Decimal(str(payload.limit).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        raise HTTPException(status_code=400, detail="Please enter a valid non-negative budget limit.")
+    if limit_dec < 0:
+        raise HTTPException(status_code=400, detail="Budget limit cannot be negative.")
+
+    limit_minor = to_minor_units(limit_dec, user.currency_code)
+    existing = (
+        db.query(Budget)
+        .filter(Budget.user_id == user.id, Budget.category == payload.category)
+        .first()
+    )
+    if existing:
+        existing.limit_minor = limit_minor
+    else:
+        db.add(Budget(user_id=user.id, category=payload.category, limit_minor=limit_minor))
+    db.commit()
+    return {"saved": True, "category": payload.category, "limit_minor": limit_minor}
+
+
+@router.post("/goals/create", status_code=201)
+async def api_create_goal(
+    request: Request,
+    payload: GoalCreateRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    verify_csrf_token(request, None)
+    clean_title = payload.title.strip()[:120]
+    if not clean_title:
+        raise HTTPException(status_code=400, detail="Goal name is required.")
+    try:
+        target_dec = Decimal(str(payload.target).replace(",", "").strip())
+        saved_dec = Decimal(str(payload.saved or "0").replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        raise HTTPException(status_code=400, detail="Please enter valid amounts.")
+    if target_dec <= 0 or saved_dec < 0:
+        raise HTTPException(status_code=400, detail="Target must be positive and saved amount non-negative.")
+
+    deadline_date = None
+    if payload.deadline.strip():
+        try:
+            deadline_date = date.fromisoformat(payload.deadline.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Please choose a valid target date.")
+
+    target_minor = to_minor_units(target_dec, user.currency_code)
+    saved_minor = to_minor_units(saved_dec, user.currency_code)
+    goal = Goal(
+        user_id=user.id,
+        title=clean_title,
+        target_minor=max(target_minor, 1),
+        saved_minor=saved_minor,
+        deadline=deadline_date,
+        note=payload.note.strip()[:255],
+    )
+    db.add(goal)
+    db.commit()
+    db.refresh(goal)
+    return {"id": goal.id, "title": goal.title}
+

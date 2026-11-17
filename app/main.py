@@ -24,8 +24,19 @@ from app.services.user_data import cleanup_expired_demos
 BASE_DIR = Path(__file__).resolve().parent
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if settings.environment.lower() == "production" and settings.secret_key in {
+        "",
+        "dev-stage2-change-me-in-production",
+        "change-me-to-a-long-random-secret",
+    }:
+        logger.warning("Production started with default SECRET_KEY; set a strong random SECRET_KEY environment variable.")
     settings.avatar_upload_path.mkdir(parents=True, exist_ok=True)
     init_db()
     with SessionLocal() as db:
@@ -39,11 +50,13 @@ app.add_middleware(SlowAPIMiddleware)
 
 
 @app.middleware("http")
-async def csrf_cookie_middleware(request: Request, call_next):
+async def security_and_csrf_middleware(request: Request, call_next):
     token = get_or_issue_csrf_token(request)
     response = await call_next(request)
     if CSRF_COOKIE_NAME not in request.cookies:
         set_csrf_cookie(response, token, request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     return response
 
 
@@ -71,4 +84,5 @@ app.include_router(ai.router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "stage": 4}
+    return {"status": "ok", "stage": 5}
+

@@ -19,13 +19,20 @@ from app.security import (
     clear_session_cookie,
     get_or_issue_csrf_token,
     hash_password,
+    limiter,
+    require_api_user,
     require_user,
     verify_csrf_token,
     verify_password,
 )
 from app.services.avatars import AvatarValidationError, delete_avatar_file, process_and_save_avatar
 from app.services.money import format_money
-from app.services.user_data import build_profile_context, delete_user_account
+from app.services.user_data import (
+    build_profile_context,
+    convert_user_currency,
+    delete_user_account,
+    preview_currency_conversion,
+)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -49,6 +56,7 @@ async def update_profile_info(
     request: Request,
     display_name: str = Form(""),
     allowance: str = Form("0"),
+    tight_threshold: str = Form(""),
     next_income: str = Form(""),
     csrf_token: str = Form(""),
     user: User = Depends(require_user),
@@ -61,14 +69,26 @@ async def update_profile_info(
         return templates.TemplateResponse(request, "pages/profile.html", ctx, status_code=400)
 
     precision = get_currency_precision(user.currency_code)
+    scale = Decimal(10) ** precision
     try:
         dec_val = Decimal(allowance.strip() or "0")
         if dec_val < 0:
             raise ValueError("negative")
-        allowance_minor = int((dec_val * (Decimal(10) ** precision)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        allowance_minor = int((dec_val * scale).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     except (InvalidOperation, ValueError):
         ctx = build_profile_context(user, info_error="Please enter a valid non-negative allowance amount.")
         return templates.TemplateResponse(request, "pages/profile.html", ctx, status_code=400)
+
+    threshold_minor = user.tight_threshold_minor
+    if tight_threshold.strip():
+        try:
+            t_dec = Decimal(tight_threshold.strip())
+            if t_dec < 0:
+                raise ValueError("negative")
+            threshold_minor = int((t_dec * scale).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        except (InvalidOperation, ValueError):
+            ctx = build_profile_context(user, info_error="Please enter a valid non-negative daily comfort floor.")
+            return templates.TemplateResponse(request, "pages/profile.html", ctx, status_code=400)
 
     parsed_date = None
     if next_income.strip():
@@ -83,11 +103,57 @@ async def update_profile_info(
         raise HTTPException(status_code=404, detail="User not found")
     db_user.name = clean_name
     db_user.monthly_allowance_minor = allowance_minor
+    db_user.tight_threshold_minor = threshold_minor
     db_user.next_income_date = parsed_date
     db.commit()
     db.refresh(db_user)
 
     ctx = build_profile_context(db_user, info_success="Profile details saved.")
+    return templates.TemplateResponse(request, "pages/profile.html", ctx)
+
+
+@router.post("/profile/currency/preview")
+async def preview_profile_currency(
+    request: Request,
+    target_currency: str = Form(""),
+    csrf_token: str = Form(""),
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    verify_csrf_token(request, csrf_token)
+    code = target_currency.strip().upper()
+    if not code:
+        try:
+            body = await request.json()
+            code = str(body.get("target_currency") or "").strip().upper()
+        except Exception:
+            code = ""
+    try:
+        return JSONResponse(preview_currency_conversion(db, user, code))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/profile/currency/convert", response_class=HTMLResponse)
+async def convert_profile_currency(
+    request: Request,
+    target_currency: str = Form(""),
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    verify_csrf_token(request, csrf_token)
+    code = target_currency.strip().upper()
+    try:
+        updated_user = convert_user_currency(db, user, code)
+    except ValueError as exc:
+        ctx = build_profile_context(user, currency_error=str(exc))
+        return templates.TemplateResponse(request, "pages/profile.html", ctx, status_code=400)
+
+    ctx = build_profile_context(
+        updated_user,
+        currency_success=f"Working currency switched to {updated_user.currency_code} and amounts converted.",
+    )
     return templates.TemplateResponse(request, "pages/profile.html", ctx)
 
 
@@ -116,6 +182,7 @@ async def update_profile_theme(
 
 
 @router.post("/profile/password", response_class=HTMLResponse)
+@limiter.limit("10/minute")
 async def update_profile_password(
     request: Request,
     current_password: str = Form(""),

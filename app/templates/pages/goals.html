@@ -66,17 +66,20 @@
     <a href="/before-you-spend" class="btn btn-secondary">Test a purchase</a>
   </section>
 
-  {% call Modal("add-goal-modal", "Create a savings goal", "Stage 1 UI preview") %}
-    <form id="goal-modal-form" class="stack-md">
-      {{ Input("title", "Goal name", placeholder="e.g. Semester exam books, Hostel bicycle", required=True, id="goal-title-input") }}
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-        {{ Input("target", "Target amount", type="number", min="1", step="1", prefix="₹", required=True, id="goal-target-input") }}
-        {{ Input("saved", "Already saved", type="number", min="0", step="1", value="0", prefix="₹", id="goal-saved-input") }}
+  {% call Modal("add-goal-modal", "Create a savings goal", "Saved to your " ~ user.currency ~ " account") %}
+    <form id="goal-modal-form" class="stack-md" novalidate>
+      <div class="state-banner state-banner-error" id="goal-modal-error" hidden role="alert">
+        <span id="goal-modal-error-text">Please enter a goal name and positive target amount.</span>
       </div>
-      {{ Input("deadline", "Target date", type="date", value="2027-02-01", required=True, id="goal-date-input") }}
+      {{ Input("title", "Goal name", placeholder="e.g. Semester exam books, Hostel bicycle", required=True, id="goal-title-input") }}
+      <div class="form-grid-2">
+        {{ Input("target", "Target amount", type="number", min="1", step="1", prefix=currency_symbol, required=True, id="goal-target-input") }}
+        {{ Input("saved", "Already saved", type="number", min="0", step="1", value="0", prefix=currency_symbol, id="goal-saved-input") }}
+      </div>
+      {{ Input("deadline", "Target date", type="date", value=today_iso, required=True, id="goal-date-input") }}
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
         <button type="button" class="btn btn-secondary" data-modal-close="add-goal-modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create goal</button>
+        <button type="submit" class="btn btn-primary" id="goal-save-btn">Create goal</button>
       </div>
     </form>
   {% endcall %}

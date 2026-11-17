@@ -8,11 +8,20 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from app.config import settings
 
 
-def _make_engine(database_url: str):
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    eng = create_engine(database_url, connect_args=connect_args, future=True)
+def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url[len("postgres://"):]
+    if database_url.startswith("postgresql://") and "+psycopg" not in database_url:
+        return "postgresql+psycopg://" + database_url[len("postgresql://"):]
+    return database_url
 
-    if database_url.startswith("sqlite"):
+
+def _make_engine(database_url: str):
+    url = _normalize_database_url(database_url)
+    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+    eng = create_engine(url, connect_args=connect_args, future=True)
+
+    if url.startswith("sqlite"):
         @event.listens_for(eng, "connect")
         def _enable_sqlite_fk(dbapi_connection, _connection_record):
             cursor = dbapi_connection.cursor()

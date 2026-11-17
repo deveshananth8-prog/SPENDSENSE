@@ -151,24 +151,12 @@
         {% endfor %}
       </select>
     </div>
-
-    <div style="display: flex; gap: 8px; align-items: center;">
-      <button type="button" class="btn btn-ghost btn-sm" id="toggle-loading-demo">Preview loading</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="toggle-error-demo">Preview error</button>
-    </div>
   </div>
 
   <!-- Error State Container -->
-  <div class="state-banner state-banner-error" id="expenses-error-state" hidden style="margin-bottom: 16px;">
-    <span>Could not refresh expenses right now. Check your connection and try again.</span>
-    <button type="button" class="btn btn-secondary btn-sm" id="dismiss-error-demo">Retry</button>
-  </div>
-
-  <!-- Loading State Container -->
-  <div id="expenses-loading-state" hidden class="stack-sm" style="margin-bottom: 16px;" aria-label="Loading expenses">
-    <div class="skeleton-row"></div>
-    <div class="skeleton-row"></div>
-    <div class="skeleton-row"></div>
+  <div class="state-banner state-banner-error" id="expenses-error-state" hidden style="margin-bottom: 16px;" role="alert">
+    <span id="expenses-error-text">Could not update expenses right now. Check your connection and try again.</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="dismiss-error-demo">Dismiss</button>
   </div>
 
   <!-- Table -->
@@ -228,10 +216,13 @@
 
   <!-- Add / Edit Expense Modal (includes live AI category suggestion while typing) -->
   {% call Modal("add-expense-modal", "Add or edit expense", "Suggested categories update automatically as you type") %}
-    <form id="expense-modal-form" class="stack-md">
+    <form id="expense-modal-form" class="stack-md" novalidate>
       <input type="hidden" id="modal-exp-id" value="" />
+      <div class="state-banner state-banner-error" id="modal-exp-error" hidden role="alert">
+        <span id="modal-exp-error-text">Please enter a merchant and positive amount.</span>
+      </div>
       {{ Input("merchant", "Merchant or title", placeholder="e.g. Campus Mess, Metro Card, Starbucks", required=True, id="modal-exp-merchant") }}
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div class="form-grid-2">
         {{ Input("amount", "Amount", type="number", min="0.01", step="0.01", prefix=currency_symbol, required=True, id="modal-exp-amount") }}
         {{ Input("date", "Date", type="date", value=today_iso, required=True, id="modal-exp-date") }}
       </div>

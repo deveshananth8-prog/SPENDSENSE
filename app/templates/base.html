@@ -122,10 +122,12 @@
   </main>
 
   {% if not is_public %}
-    <a href="/before-you-spend" class="floating-afford-btn" aria-label="Can I afford this? Open Before You Spend simulator">
-      <i data-lucide="scale" aria-hidden="true" width="17" height="17"></i>
-      <span>Can I afford this?</span>
-    </a>
+    {% if active_nav != 'before_you_spend' %}
+      <a href="/before-you-spend" class="floating-afford-btn" aria-label="Can I afford this? Open Before You Spend simulator">
+        <i data-lucide="scale" aria-hidden="true" width="17" height="17"></i>
+        <span>Can I afford this?</span>
+      </a>
+    {% endif %}
 
     <nav class="mobile-tabbar" aria-label="Mobile navigation">
       <a href="/home" class="mobile-tab {{ 'is-active' if active_nav == 'home' else '' }}">

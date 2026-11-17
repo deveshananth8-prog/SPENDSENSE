@@ -8,7 +8,7 @@
   <div class="page-head">
     <div>
       <div class="meta-line">
-        <span>November 2026</span>
+        <span>{{ month_label }}</span>
         <span aria-hidden="true">·</span>
         <span>{{ total_spent_formatted }} spent of {{ total_limit_formatted }}</span>
       </div>
@@ -29,7 +29,7 @@
         <strong style="font-family: var(--font-display); font-size: 1.5rem;" class="money">{{ total_spent_formatted }} / {{ total_limit_formatted }}</strong>
       </div>
       <span style="font-size: 0.92rem; color: var(--ink-muted);">
-        <strong class="money" style="color: var(--ink);">{{ total_remaining_formatted }}</strong> left across 9 categories ({{ total_pct }}%)
+        <strong class="money" style="color: var(--ink);">{{ total_remaining_formatted }}</strong> left across {{ category_count }} categor{{ 'y' if category_count == 1 else 'ies' }} ({{ total_pct }}%)
       </span>
     </div>
     {{ ProgressBar(total_pct, tone="primary", label="Overall budget used") }}
@@ -59,24 +59,27 @@
     <section class="empty-state">
       <i data-lucide="pie-chart" aria-hidden="true" width="32" height="32" style="color: var(--ink-muted);"></i>
       <h2 class="empty-state-title">No budgets set yet</h2>
-      <p class="empty-state-body">Set monthly category caps in Stage 3, or try the demo account to preview Riya's hostel budgets.</p>
+      <p class="empty-state-body">Use "Adjust a budget" above to set monthly category caps, or try the demo account to preview Riya's hostel budgets.</p>
     </section>
   {% endif %}
 
-  {% call Modal("edit-budget-modal", "Adjust category budget", "Stage 1 UI preview") %}
-    <form class="stack-md" onsubmit="event.preventDefault(); document.getElementById('edit-budget-modal').hidden = true;">
+  {% call Modal("edit-budget-modal", "Adjust category budget", "Set or update your monthly cap in " ~ user.currency) %}
+    <form id="budget-modal-form" class="stack-md" novalidate>
+      <div class="state-banner state-banner-error" id="budget-modal-error" hidden role="alert">
+        <span id="budget-modal-error-text">Please enter a valid non-negative limit.</span>
+      </div>
       <div class="field">
         <label class="field-label" for="budget-cat-select">Category</label>
         <select id="budget-cat-select" class="select">
-          {% for b in budgets %}
-            <option value="{{ b.category }}">{{ b.category }}</option>
+          {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
           {% endfor %}
         </select>
       </div>
-      {{ Input("limit", "Monthly limit", value="2200", type="number", min="0", step="50", prefix="₹") }}
+      {{ Input("limit", "Monthly limit", value="2200", type="number", min="0", step="1", prefix=currency_symbol, id="budget-limit-input") }}
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
         <button type="button" class="btn btn-secondary" data-modal-close="edit-budget-modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save limit</button>
+        <button type="submit" class="btn btn-primary" id="budget-save-btn">Save limit</button>
       </div>
     </form>
   {% endcall %}

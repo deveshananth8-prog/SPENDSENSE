@@ -150,6 +150,13 @@
     explainTimer = setTimeout(requestAiExplanation, delayMs);
   }
 
+  function setMarkerLabelPosition(labelEl, pct) {
+    if (!labelEl) return;
+    labelEl.classList.remove("runway-marker-label-end", "runway-marker-label-start");
+    if (pct > 65) labelEl.classList.add("runway-marker-label-end");
+    else if (pct < 28) labelEl.classList.add("runway-marker-label-start");
+  }
+
   function updateSimulator(prefix) {
     var balanceEl = document.getElementById(prefix + "-balance");
     var essentialsEl = document.getElementById(prefix + "-essentials");
@@ -159,22 +166,37 @@
     var currencyEl = document.getElementById(prefix + "-currency");
     if (!balanceEl || !essentialsEl || !purchaseEl || !daysEl || !currencyEl) return;
 
+    var errBanner = document.getElementById(prefix + "-bys-error");
+    var errText = document.getElementById(prefix + "-bys-error-text");
+    var rawBal = Number(balanceEl.value || 0);
+    var rawEss = Number(essentialsEl.value || 0);
+    var rawPur = Number(purchaseEl.value || 0);
+    var rawThresh = Number(thresholdEl ? thresholdEl.value : 0);
+    var rawDays = parseInt(daysEl.value || "0", 10);
+    if (rawBal < 0 || rawEss < 0 || rawPur < 0 || rawThresh < 0 || !rawDays || rawDays < 1) {
+      if (errText) errText.textContent = "Please enter non-negative amounts and at least 1 day until next income.";
+      if (errBanner) errBanner.hidden = false;
+    } else if (errBanner) {
+      errBanner.hidden = true;
+    }
+
     var opt = currencyEl.options[currencyEl.selectedIndex];
     var code = opt.value;
     var symbol = opt.getAttribute("data-symbol") || code;
     var locale = opt.getAttribute("data-locale") || "en-US";
     var precision = parseInt(opt.getAttribute("data-precision") || "2", 10);
+    var rate = parseFloat(opt.getAttribute("data-rate") || "1");
 
     // Sync input prefixes
     document.querySelectorAll("#" + prefix + "-bys-form .input-prefix").forEach(function (el) {
       el.textContent = symbol;
     });
 
-    var balanceMinor = toMinor(balanceEl.value, precision);
-    var essentialsMinor = toMinor(essentialsEl.value, precision);
-    var purchaseMinor = toMinor(purchaseEl.value, precision);
-    var days = Math.max(parseInt(daysEl.value || "1", 10) || 1, 1);
-    var thresholdMinor = toMinor(thresholdEl ? thresholdEl.value : "100", precision);
+    var balanceMinor = Math.max(toMinor(balanceEl.value, precision), 0);
+    var essentialsMinor = Math.max(toMinor(essentialsEl.value, precision), 0);
+    var purchaseMinor = Math.max(toMinor(purchaseEl.value, precision), 0);
+    var days = Math.max(rawDays || 1, 1);
+    var thresholdMinor = Math.max(toMinor(thresholdEl ? thresholdEl.value : "100", precision), 0);
 
     var res = evaluateAffordability(balanceMinor, essentialsMinor, purchaseMinor, days, thresholdMinor, code, locale, precision);
 
@@ -227,6 +249,74 @@
         barAfter.style.width = (res.leftAfter < 0 ? 0 : pct) + "%";
         barAfter.className = "progress-fill" + (res.tone !== "ok" ? " tone-" + res.tone : "");
       }
+
+      // Live Money Runway impact marker
+      var fullForm = document.getElementById("full-bys-form");
+      var baseCur = (fullForm && fullForm.getAttribute("data-base-currency")) || code;
+      var baseAvgDaily = parseInt((fullForm && fullForm.getAttribute("data-avg-daily-minor")) || "0", 10);
+      var baseRate = 1;
+      for (var i = 0; i < currencyEl.options.length; i++) {
+        if (currencyEl.options[i].value === baseCur) {
+          baseRate = parseFloat(currencyEl.options[i].getAttribute("data-rate") || "1");
+          break;
+        }
+      }
+      var scaledAvgDaily = baseAvgDaily > 0 ? Math.max(Math.round(baseAvgDaily * (rate / baseRate)), 1) : 100;
+      var safeBefore = Math.max(res.safeToSpend, 0);
+      var safeAfter = Math.max(res.leftAfter, 0);
+      var beforeDays = Math.round(safeBefore / scaledAvgDaily);
+      var afterDays = Math.round(safeAfter / scaledAvgDaily);
+      var spanDays = Math.max(days + 6, beforeDays + 2, afterDays + 2, 16);
+      var incomePct = Math.min(Math.max(Math.round((days / spanDays) * 100), 15), 92);
+      var beforePct = Math.min(Math.max(Math.round((beforeDays / spanDays) * 100), 8), 96);
+      var afterPct = Math.min(Math.max(Math.round((afterDays / spanDays) * 100), 8), 96);
+
+      var rStatus = "At risk";
+      var rTone = "danger";
+      var rHeadline = "Projected to run short " + Math.max(days - afterDays, 1) + " days early";
+      if (afterDays >= days) {
+        rStatus = "Safe";
+        rTone = "ok";
+        rHeadline = "Your money lasts " + (afterDays - days) + " days past next allowance";
+      } else if (days - afterDays <= 3) {
+        rStatus = "Watch";
+        rTone = "warn";
+        rHeadline = "Runs out " + (days - afterDays) + " day(s) before next allowance";
+      }
+
+      var rFill = document.getElementById("bys-runway-fill");
+      var rBeforeMarker = document.getElementById("bys-runway-before-marker");
+      var rBeforeLabel = document.getElementById("bys-runway-before-label");
+      var rIncomeMarker = document.getElementById("bys-runway-income-marker");
+      var rIncomeLabel = document.getElementById("bys-runway-income-label");
+      var rAfterMarker = document.getElementById("bys-runway-after-marker");
+      var rAfterLabel = document.getElementById("bys-runway-after-label");
+      var rHeadlineEl = document.getElementById("bys-runway-headline");
+      var rPill = document.getElementById("bys-runway-status-pill");
+      var rPillText = document.getElementById("bys-runway-status-text");
+
+      if (rFill) {
+        rFill.style.width = afterPct + "%";
+        rFill.className = "runway-fill tone-" + rTone;
+      }
+      if (rBeforeMarker) rBeforeMarker.style.left = beforePct + "%";
+      if (rBeforeLabel) {
+        rBeforeLabel.textContent = "Now · " + beforeDays + "d";
+        setMarkerLabelPosition(rBeforeLabel, beforePct);
+      }
+      if (rIncomeMarker) rIncomeMarker.style.left = incomePct + "%";
+      if (rIncomeLabel) {
+        rIncomeLabel.textContent = "Income · " + days + "d";
+        setMarkerLabelPosition(rIncomeLabel, incomePct);
+      }
+      if (rAfterMarker) rAfterMarker.style.left = afterPct + "%";
+      if (rAfterLabel) {
+        rAfterLabel.textContent = "After purchase · " + afterDays + "d";
+        setMarkerLabelPosition(rAfterLabel, afterPct);
+      }
+      if (rHeadlineEl) rHeadlineEl.textContent = rHeadline;
+      if (rPill) rPill.className = "pill pill-" + rTone;
+      if (rPillText) rPillText.textContent = rStatus + " (" + afterDays + "d)";
 
       var calcSafe = document.getElementById("calc-safe");
       var calcLeft = document.getElementById("calc-left");
@@ -324,10 +414,44 @@
     var goalBanner = document.getElementById("goal-saved-banner");
     var goalText = document.getElementById("goal-saved-text");
     if (saveGoalBtn && goalBanner) {
-      saveGoalBtn.addEventListener("click", function () {
-        var item = (document.getElementById("full-item") || {}).value || "This purchase";
-        if (goalText) goalText.textContent = '"' + item + '" saved to your goal preview.';
-        goalBanner.hidden = false;
+      saveGoalBtn.addEventListener("click", async function () {
+        var item = ((document.getElementById("full-item") || {}).value || "").trim() || "Saved purchase";
+        var target = (document.getElementById("full-purchase") || {}).value || "0";
+        if (Number(target) <= 0) {
+          if (goalText) goalText.textContent = "Enter a positive purchase price first to save it as a goal.";
+          goalBanner.hidden = false;
+          return;
+        }
+        saveGoalBtn.disabled = true;
+        var nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        try {
+          var resp = await fetch("/api/goals/create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": getCsrfToken(),
+            },
+            body: JSON.stringify({
+              title: item,
+              target: target,
+              saved: 0,
+              deadline: nextMonth,
+              note: "Saved from Before You Spend",
+            }),
+          });
+          saveGoalBtn.disabled = false;
+          if (resp.ok) {
+            if (goalText) goalText.textContent = '"' + item + '" saved to your Goals!';
+            goalBanner.hidden = false;
+          } else {
+            if (goalText) goalText.textContent = 'Could not save goal right now. Visit Goals to add "' + item + '".';
+            goalBanner.hidden = false;
+          }
+        } catch (err) {
+          saveGoalBtn.disabled = false;
+          if (goalText) goalText.textContent = "Network error while saving goal.";
+          goalBanner.hidden = false;
+        }
       });
     }
   });

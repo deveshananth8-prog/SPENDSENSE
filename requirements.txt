@@ -5,6 +5,7 @@ babel>=2.16.0
 pydantic-settings>=2.6.0
 python-multipart>=0.0.17
 sqlalchemy>=2.0.36
+psycopg[binary]>=3.2.0
 pillow>=11.0.0
 argon2-cffi>=23.1.0
 slowapi>=0.1.9

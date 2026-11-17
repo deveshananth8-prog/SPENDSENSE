@@ -27,12 +27,17 @@
     return { ok: resp.ok, status: resp.status, data: data };
   }
 
+  function decimalsForCurrency(currencyCode) {
+    var code = (currencyCode || "INR").toUpperCase();
+    if (code === "JPY" || code === "KRW" || code === "VND") return 0;
+    if (code === "KWD" || code === "BHD" || code === "OMR") return 3;
+    return 2;
+  }
+
   function formatCurrencyMinor(minor, currencyCode, locale) {
     var code = (currencyCode || "INR").toUpperCase();
     var loc = (locale || "en-IN").replace("_", "-");
-    var zeroDecimals = code === "JPY" || code === "KRW" || code === "VND";
-    var threeDecimals = code === "KWD" || code === "BHD" || code === "OMR";
-    var digits = zeroDecimals ? 0 : (threeDecimals ? 3 : 2);
+    var digits = decimalsForCurrency(code);
     var major = minor / Math.pow(10, digits);
     try {
       return new Intl.NumberFormat(loc, {
@@ -80,12 +85,24 @@
 
   /* Modals */
   function initModals() {
+    var lastTrigger = null;
+
+    function closeModal(modal) {
+      if (!modal) return;
+      modal.hidden = true;
+      if (lastTrigger && document.contains(lastTrigger)) {
+        lastTrigger.focus();
+      }
+      lastTrigger = null;
+    }
+
     document.addEventListener("click", function (e) {
       var openTrigger = e.target.closest("[data-modal-open]");
       if (openTrigger) {
         var targetId = openTrigger.getAttribute("data-modal-open");
         var modal = document.getElementById(targetId);
         if (modal) {
+          lastTrigger = openTrigger;
           modal.hidden = false;
           var firstInput = modal.querySelector("input:not([type=hidden]), select, button");
           if (firstInput) firstInput.focus();
@@ -96,20 +113,19 @@
       var closeTrigger = e.target.closest("[data-modal-close]");
       if (closeTrigger) {
         var closeId = closeTrigger.getAttribute("data-modal-close");
-        var m = document.getElementById(closeId);
-        if (m) m.hidden = true;
+        closeModal(document.getElementById(closeId));
         return;
       }
 
       if (e.target.classList.contains("modal-backdrop")) {
-        e.target.hidden = true;
+        closeModal(e.target);
       }
     });
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         document.querySelectorAll(".modal-backdrop:not([hidden])").forEach(function (m) {
-          m.hidden = true;
+          closeModal(m);
         });
       }
     });
@@ -127,9 +143,10 @@
       var options = Array.from(root.querySelectorAll(".currency-option"));
       if (!trigger || !dropdown || !searchInput) return;
 
-      function closeDropdown() {
+      function closeDropdown(restoreFocus) {
         dropdown.hidden = true;
         trigger.setAttribute("aria-expanded", "false");
+        if (restoreFocus) trigger.focus();
       }
 
       trigger.addEventListener("click", function (e) {
@@ -153,6 +170,13 @@
         });
       });
 
+      dropdown.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          closeDropdown(true);
+        }
+      });
+
       options.forEach(function (opt) {
         opt.addEventListener("click", function () {
           var code = opt.getAttribute("data-code");
@@ -166,13 +190,14 @@
           });
           opt.classList.add("is-selected");
           opt.setAttribute("aria-selected", "true");
-          closeDropdown();
+          closeDropdown(true);
+          root.dispatchEvent(new CustomEvent("spendsense:currencyselected", { detail: { code: code } }));
         });
       });
 
       document.addEventListener("click", function (e) {
         if (!dropdown.hidden && !root.contains(e.target)) {
-          closeDropdown();
+          closeDropdown(false);
         }
       });
     });
@@ -405,48 +430,63 @@
       });
     }
 
-    // Loading & Error Preview Toggles
-    var loadBtn = document.getElementById("toggle-loading-demo");
-    var errBtn = document.getElementById("toggle-error-demo");
-    var loadBox = document.getElementById("expenses-loading-state");
     var errBox = document.getElementById("expenses-error-state");
+    var errBoxText = document.getElementById("expenses-error-text");
     var dismissErr = document.getElementById("dismiss-error-demo");
 
-    if (loadBtn && loadBox) {
-      loadBtn.addEventListener("click", function () {
-        loadBox.hidden = !loadBox.hidden;
-      });
+    function showTableError(msg) {
+      if (errBoxText) errBoxText.textContent = msg;
+      if (errBox) errBox.hidden = false;
     }
-    if (errBtn && errBox) {
-      errBtn.addEventListener("click", function () {
-        errBox.hidden = !errBox.hidden;
-      });
-    }
+
     if (dismissErr && errBox) {
       dismissErr.addEventListener("click", function () {
         errBox.hidden = true;
       });
     }
 
-    function appendExpenseRow(item) {
-      var id = item.id || Date.now();
-      var minor = item.amount_minor || Math.round(Number(item.amount) * 100);
+    function updateExpenseRowDom(tr, item) {
+      var id = item.id;
       var rowCurrency = item.currency || userCurrency;
+      var digits = decimalsForCurrency(rowCurrency);
+      var minor = item.amount_minor !== undefined ? item.amount_minor : Math.round(Number(item.amount) * Math.pow(10, digits));
       var rowType = item.type || "expense";
       var rowMethod = item.method || "UPI";
       var formattedAmt = item.amount_formatted || formatCurrencyMinor(minor, rowCurrency, userLocale);
 
-      var tr = document.createElement("tr");
       tr.setAttribute("data-expense-row", "");
       tr.setAttribute("data-id", String(id));
       tr.setAttribute("data-merchant", item.merchant);
-      tr.setAttribute("data-note", item.note || "Quick Add entry");
+      tr.setAttribute("data-note", item.note || "");
       tr.setAttribute("data-category", item.category);
       tr.setAttribute("data-date", item.date);
       tr.setAttribute("data-amount-minor", String(minor));
       tr.setAttribute("data-currency", rowCurrency);
       tr.setAttribute("data-type", rowType);
 
+      var cells = tr.querySelectorAll("td");
+      cells[0].textContent = item.date;
+      cells[1].children[0].textContent = item.merchant;
+      cells[1].children[1].textContent = item.note || "";
+      cells[2].textContent = item.category;
+      cells[3].textContent = rowMethod;
+      cells[4].textContent = formattedAmt;
+
+      var editButton = tr.querySelector("[data-edit-expense]");
+      var delButton = tr.querySelector("[data-delete-expense]");
+      if (editButton) {
+        editButton.setAttribute("data-edit-expense", String(id));
+        editButton.setAttribute("aria-label", "Edit " + item.merchant);
+      }
+      if (delButton) {
+        delButton.setAttribute("data-delete-expense", String(id));
+        delButton.setAttribute("aria-label", "Delete " + item.merchant);
+      }
+    }
+
+    function appendExpenseRow(item) {
+      var id = item.id || Date.now();
+      var tr = document.createElement("tr");
       tr.innerHTML =
         '<td class="num" style="white-space:nowrap;"></td>' +
         '<td><div style="font-weight:600;"></div><div style="font-size:0.82rem;color:var(--ink-muted);"></div></td>' +
@@ -459,14 +499,7 @@
         '<button type="button" class="icon-btn" data-delete-expense="' + id + '" aria-label="Delete">' +
         '<i data-lucide="trash-2" aria-hidden="true" width="15" height="15"></i></button></div></td>';
 
-      var cells = tr.querySelectorAll("td");
-      cells[0].textContent = item.date;
-      cells[1].children[0].textContent = item.merchant;
-      cells[1].children[1].textContent = item.note || "Quick Add entry";
-      cells[2].textContent = item.category;
-      cells[3].textContent = rowMethod;
-      cells[4].textContent = formattedAmt;
-
+      updateExpenseRowDom(tr, item);
       tbody.prepend(tr);
       initIcons();
       applyFilters();
@@ -700,10 +733,20 @@
       });
     }
 
+    var modalExpErr = document.getElementById("modal-exp-error");
+    var modalExpErrText = document.getElementById("modal-exp-error-text");
+
+    function showModalExpError(msg) {
+      if (modalExpErrText) modalExpErrText.textContent = msg;
+      if (modalExpErr) modalExpErr.hidden = false;
+    }
+
     document.querySelectorAll('[data-modal-open="add-expense-modal"]').forEach(function (trigger) {
       trigger.addEventListener("click", function () {
         manualCategoryChosen = false;
+        document.getElementById("modal-exp-id").value = "";
         if (catHintBox) catHintBox.hidden = true;
+        if (modalExpErr) modalExpErr.hidden = true;
       });
     });
 
@@ -736,29 +779,50 @@
     if (modalMerchant) modalMerchant.addEventListener("input", triggerCategorySuggest);
     if (modalNote) modalNote.addEventListener("input", triggerCategorySuggest);
 
-    tbody.addEventListener("click", function (e) {
+    tbody.addEventListener("click", async function (e) {
       var delBtn = e.target.closest("[data-delete-expense]");
       if (delBtn) {
         var row = delBtn.closest("[data-expense-row]");
-        if (row) {
-          row.remove();
-          applyFilters();
+        var delId = delBtn.getAttribute("data-delete-expense");
+        if (row && delId) {
+          delBtn.disabled = true;
+          try {
+            var res = await apiPostJson("/api/expenses/" + delId + "/delete", {});
+            if (!res.ok) {
+              delBtn.disabled = false;
+              showTableError(res.data.detail || "Could not delete that expense.");
+              return;
+            }
+            row.remove();
+            applyFilters();
+          } catch (err) {
+            delBtn.disabled = false;
+            showTableError("Network error while deleting expense. Please try again.");
+          }
         }
         return;
       }
       var editBtn = e.target.closest("[data-edit-expense]");
       if (editBtn) {
-        var row = editBtn.closest("[data-expense-row]");
+        var editRow = editBtn.closest("[data-expense-row]");
         var modal = document.getElementById("add-expense-modal");
-        if (row && modal) {
+        if (editRow && modal) {
           manualCategoryChosen = true;
-          document.getElementById("modal-exp-id").value = row.getAttribute("data-id") || "";
-          document.getElementById("modal-exp-merchant").value = row.getAttribute("data-merchant") || "";
-          document.getElementById("modal-exp-amount").value = (parseInt(row.getAttribute("data-amount-minor") || "0", 10) / 100).toFixed(2).replace(/\.00$/, "");
-          document.getElementById("modal-exp-date").value = row.getAttribute("data-date") || "";
-          document.getElementById("modal-exp-category").value = row.getAttribute("data-category") || "Other";
-          document.getElementById("modal-exp-note").value = row.getAttribute("data-note") || "";
+          if (modalExpErr) modalExpErr.hidden = true;
+          var rowCur = editRow.getAttribute("data-currency") || userCurrency;
+          var digits = decimalsForCurrency(rowCur);
+          var minorVal = parseInt(editRow.getAttribute("data-amount-minor") || "0", 10);
+          var majorNum = minorVal / Math.pow(10, digits);
+          var majorStr = digits === 0 ? String(Math.round(majorNum)) : majorNum.toFixed(digits).replace(/\.00+$/, "");
+
+          document.getElementById("modal-exp-id").value = editRow.getAttribute("data-id") || "";
+          document.getElementById("modal-exp-merchant").value = editRow.getAttribute("data-merchant") || "";
+          document.getElementById("modal-exp-amount").value = majorStr;
+          document.getElementById("modal-exp-date").value = editRow.getAttribute("data-date") || "";
+          document.getElementById("modal-exp-category").value = editRow.getAttribute("data-category") || "Other";
+          document.getElementById("modal-exp-note").value = editRow.getAttribute("data-note") || "";
           modal.hidden = false;
+          document.getElementById("modal-exp-merchant").focus();
         }
       }
     });
@@ -767,16 +831,46 @@
     if (expModalForm) {
       expModalForm.addEventListener("submit", async function (e) {
         e.preventDefault();
+        if (modalExpErr) modalExpErr.hidden = true;
         var existingId = document.getElementById("modal-exp-id").value;
         var merchant = document.getElementById("modal-exp-merchant").value.trim();
         var amount = document.getElementById("modal-exp-amount").value;
         var dateStr = document.getElementById("modal-exp-date").value;
         var cat = document.getElementById("modal-exp-category").value;
         var note = document.getElementById("modal-exp-note").value.trim();
-        if (!merchant || !amount) return;
 
-        if (!existingId) {
-          try {
+        if (!merchant) {
+          showModalExpError("Please enter a merchant or title.");
+          return;
+        }
+        if (!amount || Number(amount) <= 0) {
+          showModalExpError("Please enter a valid positive amount.");
+          return;
+        }
+        if (!dateStr) {
+          showModalExpError("Please choose a date.");
+          return;
+        }
+
+        try {
+          if (existingId) {
+            var upd = await apiPostJson("/api/expenses/" + existingId + "/update", {
+              merchant: merchant,
+              amount: amount,
+              category: cat,
+              date: dateStr,
+              note: note,
+            });
+            if (!upd.ok) {
+              showModalExpError(upd.data.detail || "Could not save changes.");
+              return;
+            }
+            var existingRow = tbody.querySelector('[data-id="' + existingId + '"]');
+            if (existingRow) {
+              updateExpenseRowDom(existingRow, upd.data);
+              applyFilters();
+            }
+          } else {
             var res = await apiPostJson("/api/expenses/quick-save", {
               merchant: merchant,
               amount: amount,
@@ -786,81 +880,103 @@
               type: "expense",
               confirm_currency_mismatch: false,
             });
-            if (res.ok) {
-              appendExpenseRow(res.data);
-              expModalForm.reset();
-              document.getElementById("add-expense-modal").hidden = true;
+            if (!res.ok) {
+              showModalExpError(res.data.detail || "Could not save expense.");
               return;
             }
-          } catch (err) {}
+            appendExpenseRow(res.data);
+          }
+          document.getElementById("modal-exp-id").value = "";
+          expModalForm.reset();
+          document.getElementById("add-expense-modal").hidden = true;
+        } catch (err) {
+          showModalExpError("Network error while saving expense. Please try again.");
         }
-
-        if (existingId) {
-          var existingRow = tbody.querySelector('[data-id="' + existingId + '"]');
-          if (existingRow) existingRow.remove();
-        }
-        appendExpenseRow({
-          id: existingId || Date.now(),
-          merchant: merchant,
-          amount: amount,
-          category: cat,
-          date: dateStr,
-          note: note,
-          currency: userCurrency,
-        });
-        document.getElementById("modal-exp-id").value = "";
-        expModalForm.reset();
-        document.getElementById("add-expense-modal").hidden = true;
       });
     }
   }
 
-  /* Goals Modal UI Preview */
-  function initGoalsModal() {
-    var form = document.getElementById("goal-modal-form");
-    var grid = document.getElementById("goals-grid");
-    if (!form || !grid) return;
+  /* Budgets Modal DB Persistence */
+  function initBudgetsModal() {
+    var form = document.getElementById("budget-modal-form");
+    if (!form) return;
+    var errBox = document.getElementById("budget-modal-error");
+    var errText = document.getElementById("budget-modal-error-text");
+    var saveBtn = document.getElementById("budget-save-btn");
 
-    form.addEventListener("submit", function (e) {
+    form.addEventListener("submit", async function (e) {
       e.preventDefault();
-      var title = document.getElementById("goal-title-input").value.trim();
-      var target = Number(document.getElementById("goal-target-input").value || 0);
-      var saved = Number(document.getElementById("goal-saved-input").value || 0);
-      var dateStr = document.getElementById("goal-date-input").value;
-      if (!title || target <= 0) return;
-
-      var pct = Math.min(Math.round((saved / target) * 100), 100);
-      var fmt = function (v) {
-        return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(v);
-      };
-
-      var card = document.createElement("article");
-      card.className = "card";
-      card.style.cssText = "display:flex;flex-direction:column;justify-content:space-between;gap:16px;";
-      card.innerHTML =
-        '<div><div class="meta-line" style="margin-bottom:6px;"><span>Target date · ' +
-        dateStr +
-        '</span></div><h2 style="font-size:1.25rem;margin-bottom:6px;"></h2><p style="font-size:0.88rem;color:var(--ink-muted);">Added to preview</p></div>' +
-        '<div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
-        '<span class="money" style="font-family:var(--font-display);font-size:1.4rem;font-weight:600;">' +
-        fmt(saved) +
-        '</span><span class="money" style="font-size:0.85rem;color:var(--ink-muted);">of ' +
-        fmt(target) +
-        " (" +
-        pct +
-        '%)</span></div><div class="progress-wrap"><div class="progress-track"><div class="progress-fill tone-primary" style="width:' +
-        pct +
-        '%;"></div></div></div><div style="margin-top:10px;font-size:0.84rem;color:var(--ink-muted);">' +
-        fmt(Math.max(target - saved, 0)) +
-        " still to go</div></div>";
-      card.querySelector("h2").textContent = title;
-      grid.appendChild(card);
-      form.reset();
-      document.getElementById("add-goal-modal").hidden = true;
+      if (errBox) errBox.hidden = true;
+      var category = document.getElementById("budget-cat-select").value;
+      var limitVal = document.getElementById("budget-limit-input").value;
+      if (limitVal === "" || Number(limitVal) < 0) {
+        if (errText) errText.textContent = "Please enter a non-negative monthly limit.";
+        if (errBox) errBox.hidden = false;
+        return;
+      }
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        var res = await apiPostJson("/api/budgets/update", { category: category, limit: limitVal });
+        if (saveBtn) saveBtn.disabled = false;
+        if (!res.ok) {
+          if (errText) errText.textContent = res.data.detail || "Could not update budget limit.";
+          if (errBox) errBox.hidden = false;
+          return;
+        }
+        window.location.reload();
+      } catch (err) {
+        if (saveBtn) saveBtn.disabled = false;
+        if (errText) errText.textContent = "Network error while saving budget. Please try again.";
+        if (errBox) errBox.hidden = false;
+      }
     });
   }
 
-  /* Profile Avatar Auto-Submit */
+  /* Goals Modal DB Persistence */
+  function initGoalsModal() {
+    var form = document.getElementById("goal-modal-form");
+    if (!form) return;
+    var errBox = document.getElementById("goal-modal-error");
+    var errText = document.getElementById("goal-modal-error-text");
+    var saveBtn = document.getElementById("goal-save-btn");
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (errBox) errBox.hidden = true;
+      var title = document.getElementById("goal-title-input").value.trim();
+      var target = document.getElementById("goal-target-input").value;
+      var saved = document.getElementById("goal-saved-input").value || "0";
+      var dateStr = document.getElementById("goal-date-input").value;
+      if (!title || Number(target) <= 0 || Number(saved) < 0) {
+        if (errText) errText.textContent = "Please enter a goal name, positive target, and non-negative saved amount.";
+        if (errBox) errBox.hidden = false;
+        return;
+      }
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        var res = await apiPostJson("/api/goals/create", {
+          title: title,
+          target: target,
+          saved: saved,
+          deadline: dateStr,
+          note: "Personal savings goal",
+        });
+        if (saveBtn) saveBtn.disabled = false;
+        if (!res.ok) {
+          if (errText) errText.textContent = res.data.detail || "Could not create goal.";
+          if (errBox) errBox.hidden = false;
+          return;
+        }
+        window.location.reload();
+      } catch (err) {
+        if (saveBtn) saveBtn.disabled = false;
+        if (errText) errText.textContent = "Network error while creating goal. Please try again.";
+        if (errBox) errBox.hidden = false;
+      }
+    });
+  }
+
+  /* Profile Avatar Auto-Submit & Currency Conversion Preview */
   function initProfileAndAuth() {
     var fileInput = document.getElementById("avatar-file-input");
     var uploadForm = document.getElementById("avatar-upload-form");
@@ -869,6 +985,57 @@
       fileInput.addEventListener("change", function () {
         if (fileInput.files && fileInput.files[0]) {
           uploadForm.submit();
+        }
+      });
+    }
+
+    var previewBtn = document.getElementById("preview-currency-btn");
+    var targetInput = document.getElementById("profile-cp-value");
+    var previewPanel = document.getElementById("currency-preview-panel");
+    var previewRate = document.getElementById("currency-preview-rate");
+    var previewRows = document.getElementById("currency-preview-rows");
+    var previewErr = document.getElementById("currency-preview-error");
+    var previewErrText = document.getElementById("currency-preview-error-text");
+
+    if (previewBtn && targetInput && previewPanel && previewRows) {
+      previewBtn.addEventListener("click", async function () {
+        if (previewErr) previewErr.hidden = true;
+        previewBtn.disabled = true;
+        try {
+          var res = await apiPostJson("/profile/currency/preview", {
+            target_currency: targetInput.value || "INR",
+          });
+          previewBtn.disabled = false;
+          if (!res.ok) {
+            if (previewErrText) previewErrText.textContent = res.data.detail || "Could not preview currency conversion.";
+            if (previewErr) previewErr.hidden = false;
+            return;
+          }
+          if (previewRate) {
+            previewRate.textContent = res.data.rate_display + " (as of " + res.data.as_of + ")";
+          }
+          previewRows.innerHTML = "";
+          (res.data.rows || []).forEach(function (row) {
+            var tr = document.createElement("tr");
+            var tdLabel = document.createElement("td");
+            var tdBefore = document.createElement("td");
+            var tdAfter = document.createElement("td");
+            tdLabel.textContent = row.label;
+            tdBefore.textContent = row.before;
+            tdBefore.className = "num money";
+            tdAfter.textContent = row.after;
+            tdAfter.className = "num money";
+            tdAfter.style.fontWeight = "600";
+            tr.appendChild(tdLabel);
+            tr.appendChild(tdBefore);
+            tr.appendChild(tdAfter);
+            previewRows.appendChild(tr);
+          });
+          previewPanel.hidden = false;
+        } catch (err) {
+          previewBtn.disabled = false;
+          if (previewErrText) previewErrText.textContent = "Network error while loading conversion preview.";
+          if (previewErr) previewErr.hidden = false;
         }
       });
     }
@@ -908,6 +1075,7 @@
     initHomeAi();
     initMoneyBuddy();
     initExpenses();
+    initBudgetsModal();
     initGoalsModal();
     initProfileAndAuth();
     initCountUp();

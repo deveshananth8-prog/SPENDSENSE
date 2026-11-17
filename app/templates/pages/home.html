@@ -32,17 +32,17 @@
     </article>
     <article class="kpi-card">
       <div class="kpi-label">Monthly allowance</div>
-      <div class="kpi-value money">{{ kpis.income }}</div>
+      <div class="kpi-value money" data-countup="{{ kpis.income_minor }}" data-currency="{{ user.currency }}" data-locale="{{ user.locale }}">{{ kpis.income }}</div>
       <div class="kpi-note">Next on {{ runway.next_income_str }}</div>
     </article>
     <article class="kpi-card">
       <div class="kpi-label">Spent this month</div>
-      <div class="kpi-value money">{{ kpis.expenses }}</div>
+      <div class="kpi-value money" data-countup="{{ kpis.expenses_minor }}" data-currency="{{ user.currency }}" data-locale="{{ user.locale }}">{{ kpis.expenses }}</div>
       <div class="kpi-note">Across {{ kpis.tx_count }} transactions</div>
     </article>
     <article class="kpi-card">
       <div class="kpi-label">Saved in goals</div>
-      <div class="kpi-value money">{{ kpis.savings }}</div>
+      <div class="kpi-value money" data-countup="{{ kpis.savings_minor }}" data-currency="{{ user.currency }}" data-locale="{{ user.locale }}">{{ kpis.savings }}</div>
       <div class="kpi-note">{{ kpis.goal_count }} active goals</div>
     </article>
   </section>
@@ -57,9 +57,18 @@
         </div>
         <a href="/budgets" class="nav-link" style="padding: 4px 0; font-size: 0.85rem;">View budgets →</a>
       </div>
-      <div class="chart-wrap">
-        <canvas id="homeSpendingChart" aria-label="Spending breakdown by category" role="img"></canvas>
-      </div>
+      {% if kpis.tx_count > 0 %}
+        <div class="chart-wrap">
+          <canvas id="homeSpendingChart" aria-label="Spending breakdown by category" role="img"></canvas>
+        </div>
+      {% else %}
+        <div class="empty-state" style="padding: 28px 18px;">
+          <i data-lucide="pie-chart" aria-hidden="true" width="28" height="28" style="color: var(--ink-muted);"></i>
+          <h3 class="empty-state-title" style="font-size: 1.05rem;">No spending breakdown yet</h3>
+          <p class="empty-state-body" style="font-size: 0.86rem;">Log your first expense to see how each category compares.</p>
+          <a href="/expenses" class="btn btn-secondary btn-sm">Add an expense</a>
+        </div>
+      {% endif %}
     </article>
 
     <article class="card">

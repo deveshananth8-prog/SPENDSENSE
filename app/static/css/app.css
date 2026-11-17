@@ -212,7 +212,7 @@ button, input, select, textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  min-height: 40px;
+  min-height: 44px;
   white-space: nowrap;
   transition: border-color var(--t-fast), background-color var(--t-fast);
 }
@@ -277,7 +277,7 @@ button, input, select, textarea {
   text-align: left;
   cursor: pointer;
   color: var(--ink);
-  min-height: 40px;
+  min-height: 44px;
   transition: background-color var(--t-fast);
 }
 
@@ -358,8 +358,8 @@ button, input, select, textarea {
 }
 
 .btn-sm {
-  padding: 7px 14px;
-  min-height: 36px;
+  padding: 8px 14px;
+  min-height: 38px;
   font-size: 0.85rem;
 }
 
@@ -639,7 +639,7 @@ button, input, select, textarea {
   gap: 4px;
   padding: 6px 4px;
   min-width: 0;
-  min-height: 32px;
+  min-height: 38px;
   border: 0;
   background: transparent;
   border-radius: 7px;
@@ -661,6 +661,12 @@ button, input, select, textarea {
 /* CurrencyPicker */
 .currency-picker {
   position: relative;
+}
+
+.currency-select-compact {
+  min-height: 44px;
+  padding: 6px 12px;
+  font-size: 0.86rem;
 }
 
 .currency-picker-dropdown {
@@ -704,7 +710,7 @@ button, input, select, textarea {
   cursor: pointer;
   text-align: left;
   font-size: 0.88rem;
-  min-height: 38px;
+  min-height: 44px;
 }
 
 .currency-option:hover,
@@ -757,7 +763,7 @@ button, input, select, textarea {
 .runway-fill {
   height: 100%;
   border-radius: var(--radius-pill);
-  transition: width var(--t-med);
+  transition: width 360ms cubic-bezier(0.16, 1, 0.3, 1), background-color var(--t-fast);
   animation: fillBar 480ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -772,10 +778,37 @@ button, input, select, textarea {
   width: 2px;
   background: var(--ink);
   transform: translateX(-50%);
+  transition: left 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.runway-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  transform: translate(-50%, -50%);
 }
 
 .runway-marker-income {
   background: var(--primary);
+}
+
+.runway-marker-income::after {
+  border-color: var(--primary);
+}
+
+.runway-marker-before {
+  background: var(--ink-muted);
+  opacity: 0.65;
+}
+
+.runway-marker-before::after {
+  border-color: var(--ink-muted);
 }
 
 .runway-marker-label {
@@ -789,6 +822,7 @@ button, input, select, textarea {
   border-radius: 6px;
   background: var(--surface-2);
   border: 1px solid var(--border);
+  color: var(--ink);
 }
 
 .runway-marker-label-top {
@@ -802,6 +836,12 @@ button, input, select, textarea {
 .runway-marker-label-end {
   left: auto;
   right: -6px;
+  transform: none;
+}
+
+.runway-marker-label-start {
+  left: -6px;
+  right: auto;
   transform: none;
 }
 
@@ -1444,13 +1484,14 @@ button, input, select, textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink-muted);
   cursor: pointer;
+  flex-shrink: 0;
   transition: background-color var(--t-fast), color var(--t-fast);
 }
 
@@ -1488,6 +1529,70 @@ button, input, select, textarea {
 .stack-sm { display: flex; flex-direction: column; gap: var(--space-2); }
 .stack-md { display: flex; flex-direction: column; gap: var(--space-3); }
 
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* Landing AI & Privacy Trust Section */
+.landing-ai-section {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+}
+
+.ai-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.privacy-callout {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Currency Conversion Preview Table */
+.conversion-preview-box {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.conversion-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-top: 8px;
+}
+
+.conversion-table th,
+.conversion-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.conversion-table th.num,
+.conversion-table td.num {
+  text-align: right;
+}
+
+.conversion-table tr:last-child td {
+  border-bottom: 0;
+}
+
 /* Footer */
 .site-footer {
   border-top: 1px solid var(--border);
@@ -1515,7 +1620,8 @@ button, input, select, textarea {
     grid-template-columns: 1fr;
   }
 
-  .landing-benefits {
+  .landing-benefits,
+  .ai-trust-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1543,6 +1649,11 @@ button, input, select, textarea {
     padding-bottom: 128px;
   }
 
+  .btn-sm,
+  .theme-toggle-btn {
+    min-height: 44px;
+  }
+
   .budgets-grid,
   .goals-grid,
   .alternatives-grid,
@@ -1561,7 +1672,7 @@ button, input, select, textarea {
     background: var(--surface);
     border-top: 1px solid var(--border);
     padding: 4px 4px env(safe-area-inset-bottom, 4px);
-    min-height: 56px;
+    min-height: 58px;
   }
 
   .mobile-tab {
@@ -1570,7 +1681,7 @@ button, input, select, textarea {
     align-items: center;
     justify-content: center;
     gap: 3px;
-    min-height: 46px;
+    min-height: 48px;
     font-size: 0.68rem;
     font-weight: 500;
     color: var(--ink-muted);
@@ -1585,7 +1696,7 @@ button, input, select, textarea {
 
   .floating-afford-btn {
     right: 16px;
-    bottom: 70px;
+    bottom: 72px;
     padding: 10px 15px;
     min-height: 44px;
     font-size: 0.86rem;
@@ -1593,6 +1704,12 @@ button, input, select, textarea {
 
   .site-footer {
     padding-bottom: 92px;
+  }
+}
+
+@media (max-width: 600px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr;
   }
 }
 

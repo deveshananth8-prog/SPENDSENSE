@@ -246,3 +246,25 @@ def test_no_stage1_preview_copy_and_deployment_hygiene(isolated_env):
     gitignore = Path(".gitignore").read_text(encoding="utf-8")
     for pattern in [".env", "*.db", "uploads/"]:
         assert pattern in gitignore
+
+
+def test_missing_gemini_key_and_readonly_sqlite_fallback(isolated_env, monkeypatch, caplog):
+    import logging
+    from app.services.ai_client import is_ai_configured
+    from app.db import _resolve_writable_sqlite_url
+
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    assert is_ai_configured() is False
+
+    client = TestClient(app)
+    with caplog.at_level(logging.WARNING):
+        res = client.get("/health")
+    assert res.status_code == 200
+    assert res.json() == {"status": "ok", "stage": 5}
+
+    # Unwritable path falls back to temp SQLite without crashing
+    monkeypatch.setattr("app.db.os.access", lambda *_args, **_kwargs: False)
+    resolved = _resolve_writable_sqlite_url("sqlite:///./spendsense.db")
+    assert resolved.startswith("sqlite:///")
+    assert resolved.endswith("spendsense.db")
+

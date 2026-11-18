@@ -1,7 +1,10 @@
 """SpendSense AI FastAPI entrypoint (Stage 2: SQLite, Auth, Demo, Profile & Isolation)."""
 
 from contextlib import asynccontextmanager
+import logging
+import os
 from pathlib import Path
+import tempfile
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -19,28 +22,48 @@ from app.security import (
     limiter,
     set_csrf_cookie,
 )
+from app.services.ai_client import is_ai_configured
 from app.services.user_data import cleanup_expired_demos
 
 BASE_DIR = Path(__file__).resolve().parent
-
-
-import logging
-
 logger = logging.getLogger(__name__)
+
+
+def _ensure_upload_dir() -> None:
+    try:
+        settings.avatar_upload_path.mkdir(parents=True, exist_ok=True)
+        if not os.access(settings.avatar_upload_path, os.W_OK | os.X_OK):
+            raise PermissionError(f"Upload dir {settings.avatar_upload_path} is not writable")
+    except OSError as exc:
+        fallback = Path(tempfile.gettempdir()) / "spendsense_uploads" / "avatars"
+        fallback.mkdir(parents=True, exist_ok=True)
+        logger.warning(
+            "Upload directory %s unavailable (%s); falling back to %s.",
+            settings.upload_dir,
+            exc,
+            fallback,
+        )
+        settings.upload_dir = str(fallback)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if settings.environment.lower() == "production" and settings.secret_key in {
-        "",
-        "dev-stage2-change-me-in-production",
-        "change-me-to-a-long-random-secret",
-    }:
-        logger.warning("Production started with default SECRET_KEY; set a strong random SECRET_KEY environment variable.")
-    settings.avatar_upload_path.mkdir(parents=True, exist_ok=True)
-    init_db()
-    with SessionLocal() as db:
-        cleanup_expired_demos(db)
+    try:
+        if settings.environment.lower() == "production" and settings.secret_key in {
+            "",
+            "dev-stage2-change-me-in-production",
+            "change-me-to-a-long-random-secret",
+        }:
+            logger.warning("Production started with default SECRET_KEY; set a strong random SECRET_KEY environment variable.")
+        if not is_ai_configured():
+            logger.warning("GEMINI_API_KEY is missing or unset; SpendSense AI features will run in offline mode.")
+        _ensure_upload_dir()
+        init_db()
+        with SessionLocal() as db:
+            cleanup_expired_demos(db)
+    except Exception as exc:
+        logger.exception("SpendSense FastAPI startup failed: %s", exc)
+        raise
     yield
 
 
@@ -88,15 +111,19 @@ async def health():
 
 
 if __name__ == "__main__":
-    import os
+    import sys
     import uvicorn
 
-    port = int(os.environ.get("PORT", "3000") or "3000")
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=port,
-        proxy_headers=True,
-        forwarded_allow_ips="*",
-    )
+    try:
+        port = int(os.environ.get("PORT", "3000") or "3000")
+        uvicorn.run(
+            "app.main:app",
+            host="0.0.0.0",
+            port=port,
+            proxy_headers=True,
+            forwarded_allow_ips="*",
+        )
+    except Exception as exc:
+        logger.exception("Fatal error launching SpendSense uvicorn server: %s", exc)
+        sys.exit(1)
 

@@ -86,3 +86,17 @@ app.include_router(ai.router)
 async def health():
     return {"status": "ok", "stage": 5}
 
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    port = int(os.environ.get("PORT", "3000") or "3000")
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=port,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )
+

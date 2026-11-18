@@ -1,76 +1,23 @@
-import { existsSync } from 'node:fs';
-import { execSync, spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { buildUvicornArgs, ensurePythonEnv, resolveListenConfig } from './python_env.mjs';
 
 const root = process.cwd();
-const venvDir = resolve(root, '.venv');
-const uvicornBin = resolve(venvDir, 'bin', 'uvicorn');
+const pyBin = ensurePythonEnv(root);
+const { host, port } = resolveListenConfig(process.env);
+const uvicornArgs = buildUvicornArgs(process.env);
 
-function findUv() {
-  const candidates = [
-    process.env.UV_BIN,
-    resolve(process.env.HOME || '/root', '.local/bin/uv'),
-    '/usr/local/bin/uv',
-    '/tmp/uv-bin/uv',
-  ].filter(Boolean);
+console.log(`[SpendSense] Starting server on ${host}:${port}...`);
 
-  for (const bin of candidates) {
-    if (existsSync(bin)) return bin;
-  }
+const child = spawn(pyBin, uvicornArgs, {
+  stdio: 'inherit',
+  cwd: root,
+  env: process.env,
+});
 
-  try {
-    return execSync('command -v uv', { encoding: 'utf8' }).trim();
-  } catch {
-    return null;
-  }
-}
-
-function bootstrapPythonEnv() {
-  let uvBin = findUv();
-  if (!uvBin) {
-    console.log('[SpendSense] Installing uv to bootstrap Python environment...');
-    execSync('curl -LsSf https://astral.sh/uv/install.sh | sh', {
-      stdio: 'inherit',
-      env: { ...process.env, UV_UNMANAGED_INSTALL: '/tmp/uv-bin' },
-    });
-    uvBin = findUv();
-  }
-
-  if (!uvBin) {
-    throw new Error('Failed to locate or install uv.');
-  }
-
-  if (!existsSync(venvDir)) {
-    console.log('[SpendSense] Creating Python 3.12 virtualenv...');
-    execSync(`"${uvBin}" venv --python 3.12 "${venvDir}"`, { stdio: 'inherit' });
-  }
-
-  console.log('[SpendSense] Installing FastAPI server dependencies...');
-  execSync(
-    `"${uvBin}" pip install --python "${resolve(venvDir, 'bin/python')}" -r "${resolve(root, 'requirements.txt')}"`,
-    { stdio: 'inherit' },
-  );
-}
-
-const pyBin = resolve(venvDir, 'bin', 'python');
-let hasDeps = existsSync(uvicornBin) && existsSync(pyBin);
-if (hasDeps) {
-  try {
-    execSync(`"${pyBin}" -c "import google.genai"`, { stdio: 'ignore' });
-  } catch {
-    hasDeps = false;
-  }
-}
-
-if (!hasDeps) {
-  bootstrapPythonEnv();
-}
-
-const child = spawn(
-  uvicornBin,
-  ['app.main:app', '--host', '0.0.0.0', '--port', '3000'],
-  { stdio: 'inherit', cwd: root },
-);
+child.on('error', (err) => {
+  console.error('[SpendSense] Failed to spawn uvicorn:', err);
+  process.exit(1);
+});
 
 process.on('SIGTERM', () => child.kill('SIGTERM'));
 process.on('SIGINT', () => child.kill('SIGINT'));

@@ -1,6 +1,7 @@
 """SQLAlchemy engine, session factory, and database initialization."""
 
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -18,6 +19,10 @@ def _normalize_database_url(database_url: str) -> str:
 
 def _make_engine(database_url: str):
     url = _normalize_database_url(database_url)
+    if url.startswith("sqlite:///") and not url.endswith(":memory:"):
+        db_file = Path(url[len("sqlite:///"):])
+        if str(db_file.parent) not in {"", "."}:
+            db_file.parent.mkdir(parents=True, exist_ok=True)
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     eng = create_engine(url, connect_args=connect_args, future=True)
 

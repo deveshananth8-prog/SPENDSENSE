@@ -133,17 +133,24 @@ pytest -v
 
 ---
 
-## Deployment (Render / Railway)
+## Deployment (Google Cloud Run / Render / Railway)
 
-A `Procfile` and `render.yaml` are included.
+A `Procfile`, `render.yaml`, and Node build/start wrappers (`scripts/setup_python.mjs`, `scripts/start_server.mjs`) are included.
 
-- **Start command:**
+- **Build & Start commands (Google Cloud Run / Node-wrapped build):**
+
+```bash
+npm run build   # Bootstraps Python virtualenv, installs requirements.txt, and compiles bytecode
+npm start       # Binds uvicorn to 0.0.0.0:${PORT:-3000} with proxy headers enabled
+```
+
+- **Direct Python Start command (Render / Railway):**
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-3000} --proxy-headers --forwarded-allow-ips='*'
 ```
 
-- **Important Persistence Warning:** On PaaS hosts with ephemeral filesystems (default Railway containers or free Render instances without a mounted disk), local **SQLite (`spendsense.db`) and uploaded avatars (`uploads/avatars/`) are wiped on every redeploy or restart**. Attach a **persistent disk** (e.g. `/var/data` as configured in `render.yaml` with `DATABASE_URL=sqlite:////var/data/spendsense.db` and `UPLOAD_DIR=/var/data/uploads/avatars`) or provision **PostgreSQL** (`DATABASE_URL=postgresql://...`) alongside persistent storage for uploads.
+- **Important Persistence Warning:** On PaaS hosts with ephemeral filesystems (default Cloud Run, Railway containers, or free Render instances without a mounted disk), local **SQLite (`spendsense.db`) and uploaded avatars (`uploads/avatars/`) are wiped on every redeploy or restart**. Attach a **persistent disk** (e.g. `/var/data` as configured in `render.yaml` with `DATABASE_URL=sqlite:////var/data/spendsense.db` and `UPLOAD_DIR=/var/data/uploads/avatars`) or provision **PostgreSQL** (`DATABASE_URL=postgresql://...`) alongside persistent storage for uploads.
 - Set `ENVIRONMENT=production` and a strong `SECRET_KEY` so session and CSRF cookies are issued as HTTPS-only `Secure` cookies.
 
 ---

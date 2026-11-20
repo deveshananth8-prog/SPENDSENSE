@@ -6,9 +6,9 @@ Other apps tell you where your money went; SpendSense tells you whether you can 
 
 ---
 
-## Key Features
+ ✨Key Features
 
-- **Money Runway Bar (Hero):** Maps your safe-to-spend balance (after subtracting upcoming essentials) and 14-day daily spending pace onto a timeline from today to your next allowance date.
+- **Money Runway Bar ("This is design jargon"):** Maps your safe-to-spend balance (after subtracting upcoming essentials) and 14-day daily spending pace onto a timeline from today to your next allowance date.
 - **Before You Spend Simulator:** Deterministic minor-unit affordability check (`Comfortable`, `Tight`, or `Not now`) with live Money Runway impact markers, exact calculation breakdown, three actionable alternatives (wait N days, cheaper price cap, split in two), "Save as a goal instead", and plain-language AI commentary.
 - **Money Buddy (Notebook UI):** Ask plain questions in English or Hinglish about your month. Every response only cites your grounded snapshot numbers and includes a collapsible **"Why this answer?"** breakdown.
 - **Quick Add (SMS / Natural Text / Screenshot):** Paste bank/UPI SMS messages, type shorthand like `chai 20` or `auto 80 yesterday`, or scan a payment screenshot (Gemini Vision) into an editable confirmation card, with currency mismatch warnings and per-user merchant category memory.
@@ -17,7 +17,7 @@ Other apps tell you where your money went; SpendSense tells you whether you can 
 
 ---
 
-## Tech Stack
+⚒️ Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, Jinja2, SQLAlchemy 2.0 (SQLite or PostgreSQL via `psycopg`), Pydantic Settings
 - **Security:** Argon2id password hashing (`argon2-cffi`), HMAC-signed HttpOnly session cookies, double-submit CSRF protection, SlowAPI per-IP/per-user rate limiting, Pillow EXIF-stripped 256×256 WebP avatar sanitization
@@ -27,7 +27,7 @@ Other apps tell you where your money went; SpendSense tells you whether you can 
 
 ---
 
-## Architecture
+🏗️ Architecture
 
 ```text
 app/
@@ -42,7 +42,7 @@ app/
     profile.py       # Profile info, currency preview & atomic conversion, theme, password, avatars, delete
     ai.py            # Server-only Gemini endpoints + Expense/Budget/Goal persistence endpoints
   services/
-    stage1_data.py   # Pure affordability & Money Runway math (Decimal + minor units)
+      # Pure affordability & Money Runway math (Decimal + minor units)
     money.py         # Minor-unit Decimal conversion & Babel locale formatting
     snapshot.py      # Strictly user-scoped financial snapshot builder for AI grounding
     parsers.py       # Offline/regex SMS & natural-text parser + keyword fallback categorization
@@ -54,12 +54,12 @@ app/
 data/
   rates.json         # Static reference currency rates (relative to INR) & Babel metadata
   sample_data.py     # Riya's ₹6,000 hostel student demo dataset
-tests/               # Pytest suites covering calculation math, auth/security, AI grounding, and Stage 5 polish
+tests/               # Pytest suites covering calculation math, auth/security, AI grounding
 ```
 
 ---
 
-## Local Setup
+🚀 Local Setup
 
 1. **Create and activate a virtual environment**
 
@@ -97,11 +97,11 @@ pytest -v
 
 ---
 
-## Environment Variables
+ ⚙️Environment Variables
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `SECRET_KEY` | Yes (prod) | `dev-stage2-change-me-in-production` | Signs session & CSRF cookies; must be a long random secret in production. |
+| `SECRET_KEY` | Yes (prod) |  | Signs session & CSRF cookies; must be a long random secret in production. |
 | `GEMINI_API_KEY` | Optional | `""` | Server-side Gemini API key. If omitted or unavailable, SpendSense switches cleanly to grounded offline fallbacks. |
 | `DATABASE_URL` | No | `sqlite:///./spendsense.db` | SQLite path or PostgreSQL URI (`postgres://...` / `postgresql://...`). |
 | `UPLOAD_DIR` | No | `uploads/avatars` | Directory where sanitized 256×256 WebP avatars are saved. |
@@ -109,22 +109,22 @@ pytest -v
 
 ---
 
-## How AI Is Grounded
+🧠 How AI Is Grounded
 
-1. **Code calculates everything:** Affordability verdicts, safe-to-spend balances, runway projections, budget usage, and currency conversions are computed deterministically in Python (`app/services/stage1_data.py`, `app/services/money.py`, `app/services/snapshot.py`).
+1. **Code calculates everything:** Affordability verdicts, safe-to-spend balances, runway projections, budget usage, and currency conversions are computed deterministically in Python (, `app/services/money.py`, `app/services/snapshot.py`).
 2. **Snapshot-only context:** When Money Buddy or Home Narrative calls Gemini, only the user's pre-computed `FinancialSnapshot` (currency, category totals, income/expenses, runway summary, budgets, goals, insights, last 10 transactions) is sent—the model is instructed to treat user prompts as untrusted text and never invent figures.
 3. **Inspectable working & graceful offline mode:** Every Money Buddy note provides a collapsible **"Why this answer?"** panel, Before You Spend displays **"How we calculated this"**, and every Gemini call has a 10-second timeout, bounded retry, and grounded offline fallback.
 
 ---
 
-## Currency System & Limitations
+💱 Currency System & Limitations
 
 - All money values are stored as **integers in minor units** (`paise`, `cents`, `yen`, `fils`) using Babel's `get_currency_precision()` (0 decimals for `JPY`/`KRW`/`VND`, 3 decimals for `KWD`/`BHD`/`OMR`, 2 decimals for most currencies) and Python `Decimal` (`ROUND_HALF_UP`).
 - `data/rates.json` provides **approximate static reference rates** (with an explicit `as_of` date shown in the UI). They are designed for student budgeting convenience when switching working currency—not live FX trading quotes.
 
 ---
 
-## Security Notes
+🔒 Security Notes
 
 - **Passwords:** Hashed with Argon2id (`argon2-cffi`); minimum 8 characters enforced.
 - **Sessions & Cookies:** Signed with HMAC-SHA256 (`SECRET_KEY`), `HttpOnly`, and `Secure` enforced in `ENVIRONMENT=production` (and behind HTTPS reverse proxies).
@@ -133,7 +133,7 @@ pytest -v
 
 ---
 
-## Deployment (Google Cloud Run / Render / Railway)
+☁️ Deployment (Google Cloud Run / Render / Railway)
 
 A `Procfile`, `render.yaml`, and Node build/start wrappers (`scripts/setup_python.mjs`, `scripts/start_server.mjs`) are included.
 
@@ -155,6 +155,6 @@ uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-3000} --proxy-headers --forwa
 
 ---
 
-## Disclaimer
+⚠️ Disclaimer
 
 SpendSense provides general budgeting guidance and educational estimates—not professional financial, tax, or investment advice. Exchange rates are approximate static references.

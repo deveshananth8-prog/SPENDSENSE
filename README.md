@@ -154,7 +154,10 @@ uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-3000} --proxy-headers --forwa
 - Set `ENVIRONMENT=production` and a strong `SECRET_KEY` so session and CSRF cookies are issued as HTTPS-only `Secure` cookies.
 
 ---
+💡Live Demo
 
+🚀 [Click here to watch the demo of SpendSense](https://www.youtube.com/watch?v=QkAbsLVLtus)
+---
 ⚠️ Disclaimer
 
 SpendSense provides general budgeting guidance and educational estimates—not professional financial, tax, or investment advice. Exchange rates are approximate static references.
